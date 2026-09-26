@@ -26,11 +26,21 @@ DEFAULT_CATEGORY = "后端"
 
 # 常用标签 ID 兜底表：搜索不到时按名字直接命中（掘金 tag_api 常见值）
 KNOWN_TAG_IDS = {
-    "Python": "7104", "JavaScript": "7003", "前端": "7003",
-    "Java": "7002", "后端": "7104", "Go": "7097",
-    "Android": "7095", "iOS": "7093", "人工智能": "7034",
-    "机器学习": "7034", "开发工具": "7015", "程序员": "7005",
-    "面试": "7039", "架构": "7103", "数据库": "7030",
+    "Python": "7104",
+    "JavaScript": "7003",
+    "前端": "7003",
+    "Java": "7002",
+    "后端": "7104",
+    "Go": "7097",
+    "Android": "7095",
+    "iOS": "7093",
+    "人工智能": "7034",
+    "机器学习": "7034",
+    "开发工具": "7015",
+    "程序员": "7005",
+    "面试": "7039",
+    "架构": "7103",
+    "数据库": "7030",
 }
 
 
@@ -58,7 +68,7 @@ def _resolve_tag_ids(page, tag_names):
                     hit = t
                     break
             if hit is None:
-                for t in (data.get("data") or []):
+                for t in data.get("data") or []:
                     if t.get("tag_id") or t.get("id"):
                         hit = t
                         break
@@ -76,7 +86,8 @@ def _resolve_tag_ids(page, tag_names):
 
 def api_tag_search(page, keyword):
     """掘金标签搜索接口（页面上下文 fetch，cookie 自动带）。"""
-    return page.evaluate("""async ([kw]) => {
+    return page.evaluate(
+        """async ([kw]) => {
         const r = await fetch('https://api.juejin.cn/tag_api/v1/query_tag_list'
             + '?aid=2608&spider=0', {
             method: 'POST', credentials: 'include',
@@ -84,7 +95,9 @@ def api_tag_search(page, keyword):
             body: JSON.stringify({key_word: kw, cursor: '0', limit: 10})
         });
         return {status: r.status, text: await r.text()};
-    }""", [keyword])
+    }""",
+        [keyword],
+    )
 
 
 def _click_text(page, texts, timeout=8000):
@@ -120,10 +133,15 @@ class JuejinAdapter(PlatformAdapter):
 
     # 页面结构版本（第三刀加固）：平台改版时更新此版本并同步 key_selectors
     selector_version = "2026-09"
-    key_selectors = {'editor': '.bytemd, .CodeMirror', 'title_input': "input[placeholder*='标题'], .title-input"}
-    home_url = "https://juejin.cn/"   # 2026-09-25：creator/home 对数据中心 IP 风控(4xx)，改首页（页面在 juejin.cn 域即可带 cookie 走 API）
+    key_selectors = {
+        "editor": ".bytemd, .CodeMirror",
+        "title_input": "input[placeholder*='标题'], .title-input",
+    }
+    home_url = "https://juejin.cn/"  # 2026-09-25：creator/home 对数据中心 IP 风控(4xx)，改首页（页面在 juejin.cn 域即可带 cookie 走 API）
     list_url = "https://juejin.cn/creator/content/article"
     new_url = "https://juejin.cn/editor/drafts/new"
+    # 草稿编辑器地址模板（发布走 UI 面板必经页）。提成类属性让 E2E mock 可替换。
+    editor_url = "https://juejin.cn/editor/drafts/{draft_id}"
 
     # ---------------- 登录态 ----------------
 
@@ -172,8 +190,10 @@ class JuejinAdapter(PlatformAdapter):
             pass
 
         data = self.api_get(
-            page, f"{API}/content_api/v1/article/query_list"
-                  f"?aid={AID}&user_id={uid}&sort_type=2&cursor=0")
+            page,
+            f"{API}/content_api/v1/article/query_list"
+            f"?aid={AID}&user_id={uid}&sort_type=2&cursor=0",
+        )
         rows = data.get("data") or []
         out = []
         for a in rows[:limit]:
@@ -181,19 +201,23 @@ class JuejinAdapter(PlatformAdapter):
             aid_ = a.get("article_id") or a.get("article_info", {}).get("article_id")
             info = a.get("article_info") or {}
             href = edit_map.get(title)
-            edit_url = ("https://juejin.cn" + href) if href and href.startswith("/") else href
-            out.append({
-                "post_id": aid_,
-                "title": title,
-                "url": f"https://juejin.cn/post/{aid_}" if aid_ else "",
-                "edit_url": edit_url or "",
-                "status": "published" if info.get("status") == 2 else "draft",
-                "stats": {
-                    "view": info.get("view_count", 0),
-                    "digg": info.get("digg_count", 0),
-                    "comment": info.get("comment_count", 0),
-                },
-            })
+            edit_url = (
+                ("https://juejin.cn" + href) if href and href.startswith("/") else href
+            )
+            out.append(
+                {
+                    "post_id": aid_,
+                    "title": title,
+                    "url": f"https://juejin.cn/post/{aid_}" if aid_ else "",
+                    "edit_url": edit_url or "",
+                    "status": "published" if info.get("status") == 2 else "draft",
+                    "stats": {
+                        "view": info.get("view_count", 0),
+                        "digg": info.get("digg_count", 0),
+                        "comment": info.get("comment_count", 0),
+                    },
+                }
+            )
         return out
 
     # ---------------- 发布 ----------------
@@ -202,8 +226,9 @@ class JuejinAdapter(PlatformAdapter):
         options = options or {}
         cat = options.get("category") or DEFAULT_CATEGORY
         cat_id = CATEGORIES.get(cat) or CATEGORIES[DEFAULT_CATEGORY]
-        brief = (article.get("summary")
-                 or (article.get("content_md", "")[:100].replace("\n", " ")))
+        brief = article.get("summary") or (
+            article.get("content_md", "")[:100].replace("\n", " ")
+        )
 
         # 确保在掘金域名下（cookie 需要）。goto 失败不拦：page 若已在
         # juejin.cn 域（首页能开）就继续走 API；风控页打不开也尽力发 API
@@ -216,7 +241,8 @@ class JuejinAdapter(PlatformAdapter):
 
         # 标签：把文章标签解析成掘金 tag_id（找不到时兜底 Python 7104）
         tag_ids = options.get("tag_ids") or _resolve_tag_ids(
-            page, options.get("tags") or [])
+            page, options.get("tags") or []
+        )
 
         payload = {
             "category_id": cat_id,
@@ -225,22 +251,27 @@ class JuejinAdapter(PlatformAdapter):
             "cover_image": article.get("cover") or "",
             "title": article["title"],
             "brief_content": brief,
-            "edit_type": 10,                      # 10 = Markdown
+            "edit_type": 10,  # 10 = Markdown
             "html_content": "deprecated",
             "mark_content": article.get("content_md", ""),
             "theme_ids": [],
         }
         draft = self.api_post(
-            page, f"{API}/content_api/v1/article_draft/create?aid={AID}&spider=0", payload)
+            page,
+            f"{API}/content_api/v1/article_draft/create?aid={AID}&spider=0",
+            payload,
+        )
         draft_id = (draft.get("data") or {}).get("id")
         if not draft_id:
             raise PlatformError(f"创建草稿失败: {draft}")
 
         if options.get("draft_only"):
-            return {"post_id": draft_id,
-                    "post_url": "",
-                    "edit_url": f"https://juejin.cn/editor/drafts/{draft_id}",
-                    "draft_only": True}
+            return {
+                "post_id": draft_id,
+                "post_url": "",
+                "edit_url": f"https://juejin.cn/editor/drafts/{draft_id}",
+                "draft_only": True,
+            }
 
         # ====== 掘金 2026-09：publish API 已封死，走 UI 面板发布 ======
         # 流程：进编辑器 → 点"发布"按钮开面板 → 点"确定并发布"
@@ -249,13 +280,18 @@ class JuejinAdapter(PlatformAdapter):
         # 此时返回 draft-only 结果，用户需手动在浏览器里点一次"确定并发布"。
 
         # 1. 进草稿编辑器
-        page.goto(f"https://juejin.cn/editor/drafts/{draft_id}",
-                  timeout=60000, wait_until="domcontentloaded")
+        page.goto(
+            self.editor_url.format(draft_id=draft_id),
+            timeout=60000,
+            wait_until="domcontentloaded",
+        )
         time.sleep(6)
 
         # 2. 点"发布"按钮（.xitu-btn 主按钮），打开右侧发布面板
         try:
-            page.locator("button.xitu-btn").filter(has_text="发布").first.click(timeout=8000)
+            page.locator("button.xitu-btn").filter(has_text="发布").first.click(
+                timeout=8000
+            )
         except Exception:
             page.locator("button:has-text('发布')").first.click(timeout=8000)
         time.sleep(4)
@@ -298,7 +334,10 @@ class JuejinAdapter(PlatformAdapter):
     # ---------------- 原地更新 ----------------
 
     def update(self, page, pub, article):
-        edit_url = pub.get("edit_url") or f"https://juejin.cn/editor/drafts/{pub.get('post_id')}"
+        edit_url = (
+            pub.get("edit_url")
+            or f"https://juejin.cn/editor/drafts/{pub.get('post_id')}"
+        )
         page.goto(edit_url, timeout=60000, wait_until="domcontentloaded")
         page.wait_for_selector(".CodeMirror", timeout=30000)
         time.sleep(2)

@@ -23,21 +23,21 @@ from core.adapters.base import (
 )
 
 TITLE_SEL = 'textarea.Input[placeholder*="请输入标题"]'  # 知乎标题框是 class="Input" 的 textarea
-EDITOR_SEL = 'div[data-contents="true"]'   # Draft.js 编辑器根节点
-CE_SEL = '[data-contents=true] [contenteditable=true], [data-contents=true][contenteditable=true]'
+EDITOR_SEL = 'div[data-contents="true"]'  # Draft.js 编辑器根节点
+CE_SEL = "[data-contents=true] [contenteditable=true], [data-contents=true][contenteditable=true]"
 
 
 def _click_button(page, texts, timeout=8000):
     """点文本匹配的按钮（知乎按钮样式多，按文本找最稳）"""
     for t in texts:
         try:
-            page.locator(f"button:has-text(\"{t}\")").first.click(timeout=timeout)
+            page.locator(f'button:has-text("{t}")').first.click(timeout=timeout)
             return t
         except Exception:
             continue
     # 兜底：按 CSS class（发布按钮 class 含 Button--primary）
     try:
-        page.locator('button.Button--primary').first.click(timeout=timeout)
+        page.locator("button.Button--primary").first.click(timeout=timeout)
         return "Button--primary"
     except Exception:
         pass
@@ -52,26 +52,30 @@ class ZhihuAdapter(PlatformAdapter):
 
     # 页面结构版本（第三刀加固）：平台改版时更新此版本并同步 key_selectors
     selector_version = "2026-09"
-    key_selectors = {'editor': '.DraftEditor-root', 'title_input': "textarea, input[placeholder*='标题']"}
+    key_selectors = {
+        "editor": ".DraftEditor-root",
+        "title_input": "textarea, input[placeholder*='标题']",
+    }
     home_url = "https://zhuanlan.zhihu.com/write"
-    list_url = "https://www.zhihu.com/creator"   # 创作中心（内容管理在里面）
+    list_url = "https://www.zhihu.com/creator"  # 创作中心（内容管理在里面）
     new_url = "https://zhuanlan.zhihu.com/write"
 
     # ---------------- 登录态 ----------------
 
     DOMAIN = "zhihu.com"
+    # 「我」接口地址。提成类属性让 E2E mock 可替换（与 login_url 同理）。
+    me_api = "https://www.zhihu.com/api/v4/me"
 
     def check_auth(self, page) -> bool:
         # 只认「我」接口返回真实用户：URL 判断有假成功（扫码确认页/未登录页
         # 都可能不含 /signin，2026-09-25 实测 z_c0 缺失的根因）
         try:
-            data = self.api_get(page, "https://www.zhihu.com/api/v4/me")
+            data = self.api_get(page, self.me_api)
             return bool(data and (data.get("id") or data.get("url_token")))
         except Exception:
             return False
 
     # ---------------- 列表 ----------------
-
 
     # ---------------- 正文注入 ----------------
 
@@ -88,11 +92,12 @@ class ZhihuAdapter(PlatformAdapter):
         返回 True 成功，False 失败（调用方降级到 _inject_editor）。
         """
         import tempfile, os
+
         tmp = None
         try:
             tmp = tempfile.NamedTemporaryFile(
-                suffix=".md", mode="w", encoding="utf-8",
-                delete=False, dir="data")
+                suffix=".md", mode="w", encoding="utf-8", delete=False, dir="data"
+            )
             tmp.write(content)
             tmp.close()
 
@@ -173,8 +178,12 @@ class ZhihuAdapter(PlatformAdapter):
 
         if options.get("draft_only"):
             # 知乎编辑器自动存草稿，但没有公开的草稿 ID 可拿 —— 不点发布，交人工确认
-            return {"post_id": "", "post_url": "", "edit_url": self.new_url,
-                    "draft_only": True}
+            return {
+                "post_id": "",
+                "post_url": "",
+                "edit_url": self.new_url,
+                "draft_only": True,
+            }
 
         _click_button(page, ["发布"])
         time.sleep(2)
@@ -191,17 +200,26 @@ class ZhihuAdapter(PlatformAdapter):
             time.sleep(1.5)
             if "/p/" in page.url:
                 post_id = page.url.rstrip("/").split("/p/")[-1].split("?")[0]
-                return {"post_id": post_id, "post_url": f"https://zhuanlan.zhihu.com/p/{post_id}",
-                        "edit_url": page.url, "draft_only": False}
+                return {
+                    "post_id": post_id,
+                    "post_url": f"https://zhuanlan.zhihu.com/p/{post_id}",
+                    "edit_url": page.url,
+                    "draft_only": False,
+                }
         self.save_debug(page, "zhihu_publish_stuck")
-        raise PlatformError("点了发布但 30 秒内没跳到文章页，可能弹了人工确认窗口，"
-                            "去浏览器里手动确认后用「原地更新」补状态")
+        raise PlatformError(
+            "点了发布但 30 秒内没跳到文章页，可能弹了人工确认窗口，"
+            "去浏览器里手动确认后用「原地更新」补状态"
+        )
 
     # ---------------- 原地更新 ----------------
 
     def update(self, page, pub, article):
-        page.goto(pub.get("post_url") or pub.get("edit_url"),
-                  timeout=60000, wait_until="domcontentloaded")
+        page.goto(
+            pub.get("post_url") or pub.get("edit_url"),
+            timeout=60000,
+            wait_until="domcontentloaded",
+        )
         page.wait_for_load_state("domcontentloaded")
         time.sleep(2)
         _click_button(page, ["编辑"], timeout=10000)

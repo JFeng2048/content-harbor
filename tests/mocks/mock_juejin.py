@@ -5,9 +5,12 @@
 「扫码」= 页面加载 6 秒后自动种 cookie 跳转（等价真人扫码），
 页面上也保留按钮供人工点击演示。
 """
-from flask import Flask, jsonify, make_response, redirect, request
 
-app = Flask(__name__)
+import uvicorn
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+
+app = FastAPI()
 
 LOGIN_PAGE = """<!doctype html>
 <html lang="zh-CN">
@@ -42,21 +45,21 @@ LOGIN_PAGE = """<!doctype html>
 </body></html>"""
 
 
-@app.get("/login")
-def login():
+@app.get("/login", response_class=HTMLResponse)
+async def login():
     return LOGIN_PAGE
 
 
 @app.get("/mock/scan")
-def scan():
+async def scan():
     # 等价于"用户扫完码、平台确认身份"：种下会话 cookie 并跳回创作者中心
-    resp = make_response(redirect("/creator/home"))
+    resp = RedirectResponse("/creator/home", status_code=302)
     resp.set_cookie("mock_session", "mock-uid-1", max_age=86400)
     return resp
 
 
-@app.get("/creator/home")
-def home():
+@app.get("/creator/home", response_class=HTMLResponse)
+async def home():
     return """<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <title>创作者中心 - 掘金（模拟）</title></head>
 <body style="font-family:system-ui;padding:40px">
@@ -66,40 +69,104 @@ def home():
 </body></html>"""
 
 
+# ---------- 草稿编辑器 + 发布（UI 面板流，与掘金 2026-09 版同构） ----------
+
+EDITOR_PAGE = """<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>编辑草稿 - 掘金（模拟）</title>
+<style>
+  body{font-family:system-ui;margin:0}
+  header{background:#1e80ff;color:#fff;padding:12px 24px;display:flex;justify-content:space-between;align-items:center}
+  .xitu-btn{background:#fff;color:#1e80ff;border:0;border-radius:6px;padding:8px 22px;font-size:14px;cursor:pointer}
+  #panel{position:fixed;top:0;right:-420px;width:400px;height:100vh;background:#fff;
+          box-shadow:-4px 0 20px rgba(0,0,0,.12);padding:24px;transition:right .2s}
+  #panel.on{right:0}
+  #ok{background:#1e80ff;color:#fff;border:0;border-radius:6px;padding:10px 24px;font-size:14px;cursor:pointer}
+  main{padding:24px}
+</style></head>
+<body>
+  <header><span>编辑草稿（模拟环境）</span><button class="xitu-btn" id="pub">发布</button></header>
+  <main><h2 id="title">草稿内容区</h2><div id="editor">（模拟编辑器）</div></main>
+  <div id="panel"><h3>发布设置</h3><button id="ok">确定并发布</button></div>
+  <script>
+    document.getElementById('pub').onclick = () =>
+      document.getElementById('panel').classList.add('on');
+    document.getElementById('ok').onclick = () =>
+      location.href = '/post/art-2001';
+  </script>
+</body></html>"""
+
+
+@app.get("/editor/drafts/{draft_id}", response_class=HTMLResponse)
+async def editor(request: Request, draft_id: str):
+    if not request.cookies.get("mock_session"):
+        return RedirectResponse("/login", status_code=302)
+    print(f"[mock] 打开编辑器 draft={draft_id}", flush=True)
+    return EDITOR_PAGE
+
+
+@app.get("/post/{article_id}", response_class=HTMLResponse)
+async def post(request: Request, article_id: str):
+    if not request.cookies.get("mock_session"):
+        return RedirectResponse("/login", status_code=302)
+    return (
+        f'<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
+        f"<title>{article_id} - 掘金（模拟）</title></head>"
+        f'<body style="font-family:system-ui;padding:40px">'
+        f"<h1>文章已发布（模拟）：{article_id}</h1></body></html>"
+    )
+
+
 # ---------- 内容 API（与掘金真实接口同构） ----------
 
+
 @app.get("/api/user_api/v1/user/get")
-def user_get():
+async def user_get(request: Request):
     if request.cookies.get("mock_session"):
-        return jsonify({"err_no": 0, "data": {"user_id": "mock-uid-1", "user_name": "模拟用户"}})
-    return jsonify({"err_no": 100, "err_msg": "未登录"})
+        return JSONResponse(
+            {"err_no": 0, "data": {"user_id": "mock-uid-1", "user_name": "模拟用户"}}
+        )
+    return JSONResponse({"err_no": 100, "err_msg": "未登录"})
 
 
 @app.post("/api/content_api/v1/article_draft/create")
-def draft_create():
+async def draft_create(request: Request):
     if not request.cookies.get("mock_session"):
-        return jsonify({"err_no": 100, "err_msg": "未登录"})
+        return JSONResponse({"err_no": 100, "err_msg": "未登录"})
     print("[mock] 创建草稿 OK -> draft-1001", flush=True)
-    return jsonify({"err_no": 0, "data": {"id": "draft-1001"}})
+    return JSONResponse({"err_no": 0, "data": {"id": "draft-1001"}})
 
 
 @app.post("/api/content_api/v1/article/publish")
-def publish():
+async def publish(request: Request):
     if not request.cookies.get("mock_session"):
-        return jsonify({"err_no": 100, "err_msg": "未登录"})
+        return JSONResponse({"err_no": 100, "err_msg": "未登录"})
     print("[mock] 发布文章 OK -> art-2001", flush=True)
-    return jsonify({"err_no": 0, "data": {"article_id": "art-2001"}})
+    return JSONResponse({"err_no": 0, "data": {"article_id": "art-2001"}})
 
 
 @app.get("/api/content_api/v1/article/query_list")
-def query_list():
+async def query_list(request: Request):
     if not request.cookies.get("mock_session"):
-        return jsonify({"err_no": 100, "err_msg": "未登录"})
-    return jsonify({"err_no": 0, "data": [
-        {"article_id": "art-2001", "title": "模拟登录链路验证文章",
-         "article_info": {"status": 2, "view_count": 3, "digg_count": 1, "comment_count": 0}}
-    ]})
+        return JSONResponse({"err_no": 100, "err_msg": "未登录"})
+    return JSONResponse(
+        {
+            "err_no": 0,
+            "data": [
+                {
+                    "article_id": "art-2001",
+                    "title": "模拟登录链路验证文章",
+                    "article_info": {
+                        "status": 2,
+                        "view_count": 3,
+                        "digg_count": 1,
+                        "comment_count": 0,
+                    },
+                }
+            ],
+        }
+    )
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=9102, threaded=True)
+    uvicorn.run(app, host="127.0.0.1", port=9102, log_level="warning")

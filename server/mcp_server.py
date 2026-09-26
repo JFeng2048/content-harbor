@@ -35,7 +35,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from mcp.server.fastmcp import FastMCP as MCPServer   # SDK 1.x 名 FastMCP；2.x 改名 MCPServer
+try:
+    from mcp.server.fastmcp import FastMCP as MCPServer  # SDK 1.x 名 FastMCP
+except ImportError:  # 2.x 改名 MCPServer
+    from mcp.server import MCPServer
 
 from core.service import Hub
 from core import gate as aigc_gate
@@ -50,8 +53,8 @@ hub = Hub(headless=True)
 # 可按需调：环境变量 MCP_RATE_WINDOW / MCP_RATE_MAX 覆盖。
 _RATE_WINDOW = int(os.environ.get("MCP_RATE_WINDOW", "60"))
 _RATE_MAX = int(os.environ.get("MCP_RATE_MAX", "30"))
-_rate_log = {}       # tool_name -> deque[timestamp]
-_rate_lock = None    # 异步上下文里用 asyncio.Lock；同步调用退化为普通保护
+_rate_log = {}  # tool_name -> deque[timestamp]
+_rate_lock = None  # 异步上下文里用 asyncio.Lock；同步调用退化为普通保护
 
 
 def _check_rate(name: str) -> bool:
@@ -100,45 +103,75 @@ def get_article(id: int):
 
 
 @mcp.tool(description="新建文章（AI 写稿入库）")
-def create_article(title: str, content_md: str = "", summary: str = "",
-                   tags: str = "", ai_model: str = ""):
-    aid = hub.create(title, content_md, summary=summary, tags=tags,
-                     source="ai" if ai_model else "human", ai_model=ai_model)
+def create_article(
+    title: str,
+    content_md: str = "",
+    summary: str = "",
+    tags: str = "",
+    ai_model: str = "",
+):
+    aid = hub.create(
+        title,
+        content_md,
+        summary=summary,
+        tags=tags,
+        source="ai" if ai_model else "human",
+        ai_model=ai_model,
+    )
     emit("mcp.tool", tool="create_article", id=aid, title=title)
     return json.dumps({"id": aid}, ensure_ascii=False)
 
 
 @mcp.tool(description="改文章。改完自动把已发布实例标为待同步")
-def edit_article(id: int, title: str = "", content_md: str = "",
-                 summary: str = "", tags: str = ""):
-    kw = {k: v for k, v in {"title": title, "content_md": content_md,
-                             "summary": summary, "tags": tags}.items() if v}
+def edit_article(
+    id: int, title: str = "", content_md: str = "", summary: str = "", tags: str = ""
+):
+    kw = {
+        k: v
+        for k, v in {
+            "title": title,
+            "content_md": content_md,
+            "summary": summary,
+            "tags": tags,
+        }.items()
+        if v
+    }
     if not kw:
-        return json.dumps({"ok": False, "pending_sync": 0,
-                           "note": "没传要改的字段"})
+        return json.dumps({"ok": False, "pending_sync": 0, "note": "没传要改的字段"})
     ok, pend = hub.edit(id, **kw)
     emit("mcp.tool", tool="edit_article", id=id, fields=list(kw))
     return json.dumps({"ok": ok, "pending_sync": pend}, ensure_ascii=False)
 
 
-@mcp.tool(description="发布到指定平台（AI 源强制过合规门禁）。同步执行，返回各平台结果；"
-                      "平台需人工收尾时 results 对应项带 warning 与 edit_url")
+@mcp.tool(
+    description="发布到指定平台（AI 源强制过合规门禁）。同步执行，返回各平台结果；"
+    "平台需人工收尾时 results 对应项带 warning 与 edit_url"
+)
 def publish_article(id: int, platforms, draft_only: bool = False):
     if not _check_rate("publish_article"):
-        return json.dumps({"ok": False, "reason": "触发限流，请稍后再试"},
-                          ensure_ascii=False)
+        return json.dumps(
+            {"ok": False, "reason": "触发限流，请稍后再试"}, ensure_ascii=False
+        )
     rows = hub.publish(id, platforms, draft_only=draft_only)
-    emit("mcp.tool", tool="publish_article", id=id, platforms=platforms,
-         draft_only=draft_only)
+    emit(
+        "mcp.tool",
+        tool="publish_article",
+        id=id,
+        platforms=platforms,
+        draft_only=draft_only,
+    )
     return json.dumps(rows, ensure_ascii=False, default=str)
 
 
-@mcp.tool(description="原地更新已发布的文章。同步执行，返回各平台结果；平台需人工时带 warning；"
-                      "错误码 404 文章不存在 / 422 无目标实例")
+@mcp.tool(
+    description="原地更新已发布的文章。同步执行，返回各平台结果；平台需人工时带 warning；"
+    "错误码 404 文章不存在 / 422 无目标实例"
+)
 def update_article(id: int, platforms=None):
     if not _check_rate("update_article"):
-        return json.dumps({"ok": False, "reason": "触发限流，请稍后再试"},
-                          ensure_ascii=False)
+        return json.dumps(
+            {"ok": False, "reason": "触发限流，请稍后再试"}, ensure_ascii=False
+        )
     rows = hub.update(id, platforms)
     emit("mcp.tool", tool="update_article", id=id, platforms=platforms)
     return json.dumps(rows, ensure_ascii=False, default=str)
@@ -147,8 +180,9 @@ def update_article(id: int, platforms=None):
 @mcp.tool(description="把所有改动同步到已发布平台。同步执行，返回各文章各平台结果")
 def sync_pending():
     if not _check_rate("sync_pending"):
-        return json.dumps({"ok": False, "reason": "触发限流，请稍后再试"},
-                          ensure_ascii=False)
+        return json.dumps(
+            {"ok": False, "reason": "触发限流，请稍后再试"}, ensure_ascii=False
+        )
     out = hub.sync_pending()
     emit("mcp.tool", tool="sync_pending")
     return json.dumps(out, ensure_ascii=False, default=str)
@@ -157,8 +191,9 @@ def sync_pending():
 @mcp.tool(description="抓取平台上已有文章列表入库（AI 才能看见账号里有什么）")
 def refresh_platform(platform: str):
     if not _check_rate("refresh_platform"):
-        return json.dumps({"ok": False, "reason": "触发限流，请稍后再试"},
-                          ensure_ascii=False)
+        return json.dumps(
+            {"ok": False, "reason": "触发限流，请稍后再试"}, ensure_ascii=False
+        )
     r = hub.refresh(platform)
     emit("mcp.tool", tool="refresh_platform", platform=platform)
     return json.dumps(r, ensure_ascii=False, default=str)
@@ -167,28 +202,35 @@ def refresh_platform(platform: str):
 @mcp.tool(description="检查平台登录态是否还有效")
 def check_account(platform: str):
     r = {"platform": platform, "logined": hub.check(platform)}
-    emit("mcp.tool", tool="check_account", platform=platform,
-         logined=r["logined"])
+    emit("mcp.tool", tool="check_account", platform=platform, logined=r["logined"])
     return json.dumps(r, ensure_ascii=False, default=str)
 
 
 @mcp.tool(description="AI 写一篇新文章并入库，可选顺手发布到平台（强制草稿+人审）")
-def ai_write(topic: str, style: str = "", words: int = 2000,
-             tags_hint: str = "", publish_to=None):
+def ai_write(
+    topic: str, style: str = "", words: int = 2000, tags_hint: str = "", publish_to=None
+):
     if not _check_rate("ai_write"):
-        return json.dumps({"ok": False, "reason": "触发限流，请稍后再试"},
-                          ensure_ascii=False)
+        return json.dumps(
+            {"ok": False, "reason": "触发限流，请稍后再试"}, ensure_ascii=False
+        )
     r = hub.ai_write(topic, style, words, tags_hint, publish_to)
-    emit("mcp.tool", tool="ai_write", topic=topic, id=r.get("id"),
-         aigc_labeled=r.get("aigc_labeled", False))
+    emit(
+        "mcp.tool",
+        tool="ai_write",
+        topic=topic,
+        id=r.get("id"),
+        aigc_labeled=r.get("aigc_labeled", False),
+    )
     return json.dumps(r, ensure_ascii=False, default=str)
 
 
 @mcp.tool(description="AI 按指令改写已有文章（改完自动标记待同步）")
 def ai_rewrite(id: int, instruction: str, publish_to=None):
     if not _check_rate("ai_rewrite"):
-        return json.dumps({"ok": False, "reason": "触发限流，请稍后再试"},
-                          ensure_ascii=False)
+        return json.dumps(
+            {"ok": False, "reason": "触发限流，请稍后再试"}, ensure_ascii=False
+        )
     r = hub.ai_rewrite(id, instruction, publish_to)
     emit("mcp.tool", tool="ai_rewrite", id=id, instruction=instruction[:80])
     return json.dumps(r, ensure_ascii=False, default=str)

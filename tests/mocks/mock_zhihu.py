@@ -5,9 +5,12 @@
 - 标题 textarea placeholder 含「请输入标题」（ZhihuAdapter.TITLE_SEL）
 - 正文 div[data-contents="true"]（Draft.js 根节点，ZhihuAdapter.EDITOR_SEL）
 """
-from flask import Flask, jsonify, make_response, redirect, request
 
-app = Flask(__name__)
+import uvicorn
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+
+app = FastAPI()
 
 PAGE = """<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><title>登录 - 知乎（模拟）</title>
@@ -27,50 +30,61 @@ textarea{width:100%;font-size:22px;padding:10px;border:0;border-bottom:1px solid
 [data-contents]{min-height:300px;border:1px solid #eee;padding:16px;border-radius:8px;outline:none}
 button{background:#0066ff;color:#fff;border:0;border-radius:6px;padding:8px 24px;float:right;cursor:pointer}</style></head>
 <body>
-  <textarea placeholder="请输入标题（最多 100 个字）"></textarea>
+  <textarea class="Input" placeholder="请输入标题（最多 100 个字）"></textarea>
   <div data-contents="true" contenteditable="true"><p data-first-line>正文编辑器（模拟 Draft.js）</p></div>
   <button onclick="location='/mock/publish'">发布</button>
 </body></html>"""
 
 
-@app.get("/signin")
-def signin():
+@app.get("/signin", response_class=HTMLResponse)
+async def signin():
     return PAGE
 
 
 @app.get("/mock/scan")
-def scan():
-    resp = make_response(redirect("/write"))
+async def scan():
+    resp = RedirectResponse("/write", status_code=302)
     resp.set_cookie("zhihu_session", "mock-zh-1", max_age=86400)
     return resp
 
 
-@app.get("/write")
-def write():
+@app.get("/write", response_class=HTMLResponse)
+async def write(request: Request):
     if not request.cookies.get("zhihu_session"):
-        return make_response("", 302, {"Location": "/signin"})
+        return RedirectResponse("/signin", status_code=302)
     return WRITE_PAGE
 
 
 @app.get("/mock/publish")
-def publish():
+async def publish(request: Request):
     if not request.cookies.get("zhihu_session"):
-        return jsonify({"error": "未登录"})
+        return JSONResponse({"error": "未登录"})
     print("[mock-zhihu] 发布 OK -> zz001234", flush=True)
-    return make_response("", 302, {"Location": "/p/zz001234"})
+    return RedirectResponse("/p/zz001234", status_code=302)
 
 
-@app.get("/p/zz001234")
-def article():
+@app.get("/p/zz001234", response_class=HTMLResponse)
+async def article():
     return """<!doctype html><html><head><meta charset="utf-8">
 <title>模拟文章 - 知乎</title></head><body style="font-family:system-ui;padding:40px">
 <h1>模拟文章已发布 (zz001234)</h1></body></html>"""
 
 
+@app.get("/api/v4/me")
+async def me(request: Request):
+    if request.cookies.get("zhihu_session"):
+        return JSONResponse(
+            {"id": "mock-zh-1", "url_token": "mock-zh-user", "name": "模拟用户"}
+        )
+    return JSONResponse({"error": "请登录"}, status_code=401)
+
+
 @app.get("/api/ping")
-def ping():
-    return jsonify({"ok": True, "cookies": request.cookies.get("zhihu_session", "") != ""})
+async def ping(request: Request):
+    return JSONResponse(
+        {"ok": True, "cookies": request.cookies.get("zhihu_session", "") != ""}
+    )
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=9103, threaded=True)
+    uvicorn.run(app, host="127.0.0.1", port=9103, log_level="warning")
