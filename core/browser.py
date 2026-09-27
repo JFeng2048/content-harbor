@@ -278,6 +278,36 @@ def _find_chrome():
 
 _CHROME_BIN = _find_chrome()
 
+# 可切换浏览器通道：某些平台的前端 SPA 在 patchright 自带 chromium 下整页不渲染
+# （2026-09 实测：开源中国写作页、博客园用户中心均为 0 input / body 空），
+# 换系统 Edge 同 profile 正常。用 HUB_BROWSER_CHANNEL=msedge|chrome 覆盖；
+# 不设置 = 维持原行为（自带 chromium）。
+CHANNEL_BINARIES = {
+    "msedge": [
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    ],
+    "chrome": [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    ],
+}
+
+
+def resolve_channel_executable(channel: str):
+    """把通道名解析成本机可执行文件路径；未设置/未知/文件不存在一律返回 None。
+
+    返回 None 表示"按默认方式启动"——绝不静默换浏览器，也绝不因为通道没配好
+    就让发布链路起不来。
+    """
+    name = (channel or "").strip().lower()
+    if not name:
+        return None
+    for cand in CHANNEL_BINARIES.get(name, []):
+        if Path(cand).exists():
+            return cand
+    return None
+
 
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -562,8 +592,13 @@ class BuiltinBrowser:
         )
         if self.proxy:
             opts["proxy"] = self.proxy
+        # 通道覆盖优先于自带 chromium；解析不到就回落原逻辑（保持默认行为不变）
+        channel_bin = resolve_channel_executable(
+            os.environ.get("HUB_BROWSER_CHANNEL", ""))
         try:
-            if _CHROME_BIN:
+            if channel_bin:
+                opts["executable_path"] = channel_bin
+            elif _CHROME_BIN:
                 opts["executable_path"] = str(_CHROME_BIN)
             self._ctx = self._pw.chromium.launch_persistent_context(**opts)
         except Exception as e:

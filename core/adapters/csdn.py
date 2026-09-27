@@ -1,18 +1,68 @@
 # -*- coding: utf-8 -*-
 """CSDN 适配器。
 
-CSDN 的发布接口走阿里云网关签名（X-Ca-Signature），逆向成本高还容易失效，
+CSDN 的发布接口走阿里云网关签名（X-Ca-Key / X-Ca-Signature），逆向成本高还容易失效，
 所以这里统一走**编辑器 UI 操作**——比签名稳，也和真人操作等价。
 代价是慢一点，但自动化本来也不赶这几秒。
+
+编辑页入口（2026-09-27 真机核对）：
+  创作中心列表 API（blog.csdn.net/community/home-api/v1/get-business-list）给每篇文章的
+  editUrl 就是 `https://editor.csdn.net/md/?articleId=<id>`，本适配器的 edit_url 与之
+  一致（少了斜杠也会 301 补上）。
+
+已知平台侧缺陷，update() 必须能挡住（2026-09-27 实测）：
+  从这个编辑页点「发布文章」，前端发的是
+  `POST /blog-console-api/v3/mdeditor/saveArticle`，而 payload 里 **没有 articleId**
+  且 `is_new=1` —— CSDN 于是**新建**一篇文章而不是原地更新。实测两次真实响应分别
+  返回 `id: 166737625` / `id: 166737652`，都是新号，���文章没动。
+  直接用 fetch 调同一端点补上 articleId 会被网关挡回
+  `401 {"message":"X-Ca-Key is not exist"}`，签名在前端 JS 里，不逆向。
+  所以 update() 的成功判据不能是「发布弹窗关了」（那恰恰是新建成功的信号），
+  必须是**重新打开 edit_url 能读回目标正文**；读到旧正文、或跳去了另一个
+  articleId 的 success 页，都判失败。
 """
 
 import time
 from pathlib import Path
 
-from core.adapters.base import PlatformAdapter, PlatformError, register
+from core.adapters.base import (
+    PlatformAdapter,
+    PlatformError,
+    content_evidence,
+    register,
+    title_evidence,
+)
 from core.browser import CaptchaPolicy
 
 HOME_API = "https://blog.csdn.net/community/home-api/v1/get-business-list"
+EDIT_URL_TMPL = "https://editor.csdn.net/md/?articleId={article_id}"
+EDITOR_SEL = "pre.editor__inner[contenteditable=true]"
+TITLE_SEL = ".article-bar__title--input"
+MD_FILE_INPUT_SEL = 'input[type=file][accept*=".md"], #import-markdown-file-input'
+PUBLISH_MODAL_BAR_SEL = ".modal__button-bar"
+RED_PUBLISH_SEL = "button.btn-b-red.ml16"
+SUCCESS_URL_MARK = "creation/success/"
+
+# 编辑器正文的可观测长度（只看选择器在不在会被空编辑器骗过去）。
+# 哨兵 hub:editor-len 让测试假 page 能把「编辑器当前有多长」当一等公民回。
+READY_JS = """/* hub:editor-len */ () => {
+    const el = document.querySelector('pre.editor__inner');
+    return el ? (el.innerText || '').length : -1;
+}"""
+
+# 分类专栏勾选后 CSDN 把它同步进隐藏 input[name=categories]，
+# 拿这个隐藏值当「真勾上了」的证据，比看 DOM 的 checked 可靠。
+CATEGORY_STATE_JS = """(cat) => {
+    let picked = [];
+    document.querySelectorAll('input.tag__option-chk').forEach(c => {
+        if (c.checked) picked.push(c.value);
+    });
+    let hidden = '';
+    document.querySelectorAll('input[type=hidden]').forEach(h => {
+        if ((h.name || '') === 'categories') hidden = h.value || '';
+    });
+    return {picked: picked, hidden: hidden};
+}"""
 
 
 def _click_text(page, texts, timeout=8000):
@@ -139,33 +189,45 @@ class CSDNAdapter(PlatformAdapter):
     def _import_md_file(self, page, content):
         """通过 CSDN 编辑器的 Markdown 文件导入注入正文（比 typing 稳）。
 
-        CSDN 编辑器有隐藏的 input[type=file][accept=".md"]，
-        点击"导入"按钮后文件对话框弹出，Playwright 直接 set_input_files 注入。
-        返回 True 成功，False 失败（调用方降级到 typing）。
+        2026-09-27 真机实测：编辑页上常驻一个隐藏的
+        `input#import-markdown-file-input[accept=".md"]`，**不需要先点「导入」按钮**，
+        直接 set_input_files 就会把 .md 解析进编辑器，而且是**替换**不是追加
+        （实测 5952 → 5889，正好是新正文的渲染长度）。
+
+        返回 True 成功，False 失败（调用方降级到 _set_cs_editor）。
+        这里只负责把文件送进去；「正文到底对不对」由调用方的回读判定——
+        set_input_files 返回成功不代表内容落进编辑器了。
         """
-        import tempfile, os
+        import os
+        import tempfile
         tmp = None
         try:
-            # 体检 B18 修复（QA 标质力 2026-09-21）：临时文件写项目 data 目录的
+            # 体检 B18 修复（QA 标力 2026-09-21）：临时文件写项目 data 目录的
             # 绝对路径——原来 dir="data" 是相对 CWD，从别的目录启动 uvicorn 会炸
             data_dir = Path(__file__).resolve().parent.parent.parent / "data"
             data_dir.mkdir(parents=True, exist_ok=True)
-            # 写临时 .md 文件
             tmp = tempfile.NamedTemporaryFile(
                 suffix=".md", mode="w", encoding="utf-8",
                 delete=False, dir=str(data_dir))
             tmp.write(content)
             tmp.close()
-            # 找到隐藏的 md 文件输入框
-            file_input = page.query_selector('input[type=file][accept*=".md"]')
+            # aqg: top-level boundary 找不到文件输入框就返回 False 让调用方降级
+            try:
+                file_input = page.query_selector(MD_FILE_INPUT_SEL)
+            except Exception:
+                file_input = None
             if not file_input:
-                # 兜底：找任意 .md 输入框
-                file_input = page.query_selector('input[type=file]')
+                # aqg: top-level boundary 主选择器没命中再退到任意 file input，仍失败就降级
+                try:
+                    file_input = page.query_selector('input[type=file]')
+                except Exception:
+                    file_input = None
             if not file_input:
                 return False
             file_input.set_input_files(tmp.name)
             time.sleep(4)  # 等 CSDN 解析 Markdown 并填入编辑器
             return True
+        # aqg: top-level boundary 导入这条路整体降级，不把异常抛给上层
         except Exception:
             return False
         finally:
@@ -228,25 +290,43 @@ class CSDNAdapter(PlatformAdapter):
         except Exception:
             return False
 
+    def _select_category(self, page, category):
+        """在发布弹窗里勾选分类专栏（必填项），返回是否真勾上。
+
+        2026-09-27 真机实测：老实现点的是 c.closest('label')，点完
+        input.checked 仍是 false、隐藏 input[name=categories] 仍是空串——
+        而「分类专栏没勾」时 CSDN 前端跑完 userstatus / risk/check 两个前置
+        检查就**不再发发布请求**，弹窗一直挂着。表现就是 update() 的
+        「30s 内发布弹窗未关闭」。改成直接 input.click()（勾选框本体是
+        display:none，label 转发不可靠），并以隐藏 input 的值为判据。
+        """
+        if not category:
+            return False
+        n = self._safe_eval(
+            page,
+            """(cat) => {
+                let n = 0;
+                document.querySelectorAll('input.tag__option-chk').forEach(c => {
+                    if (c.value === cat && !c.checked) { c.click(); n++; }
+                });
+                return n;
+            }""",
+            category, 0)
+        time.sleep(1)
+        st = self._safe_eval(page, CATEGORY_STATE_JS, category, {}) or {}
+        return category in (st.get("picked") or []) or category in (st.get("hidden") or "")
+
     def _fill_publish_form(self, page, article, options):
         """填发布弹窗三件套：分类专栏 + 摘要 + 标签。
 
-        全部用 JS 原生 setter/label click（探针 61~68 验证可写入框架状态）：
-          - 分类：JS click 到 label 上（checkbox 本体 display:none 点不了），
-            会同步写进隐藏 input[name=categories]，CSDN 认这个值
-          - 摘要：nativeInputValueSetter + input 事件（字数计数器会同步变化，
-            说明 Vue 状态已更新）
+        分类：input.click() 直接勾（见 _select_category）。
+        摘要：nativeInputValueSetter + input 事件（字数计数器会同步变化，
+        说明 Vue 状态已更新）。
+        标签：走 _select_tag，选完不关面板。
         """
         import time as _time
-        # 分类专栏（必填，默认后端与架构设计；可经 options.category 指定）
         category = options.get("category") or "后端与架构设计"
-        page.evaluate("""(val) => {
-            const inps = document.querySelectorAll('input.tag__option-chk');
-            for (const c of inps) { if (c.value === val) {
-                const lbl = c.closest('label');
-                if (lbl) lbl.click(); else c.click();
-            } }
-        }""", category)
+        self._select_category(page, category)
         _time.sleep(1)
 
         # 摘要（可选但强烈建议，不填 CSDN 会截正文前 256 字）
@@ -437,35 +517,160 @@ class CSDNAdapter(PlatformAdapter):
                 "edit_url": f"https://editor.csdn.net/md/?articleId={aid}",
                 "draft_only": False}
 
+    def _wait_editor(self, page, want_text=True, timeout=45, poll=1.0):
+        """等编辑器把正文渲染出来，返回观察到的长度（-1 = 选择器没命中）。"""
+        deadline = time.time() + timeout
+        last = -1
+        while time.time() < deadline:
+            v = self._safe_eval(page, READY_JS, None, -1)
+            last = v if isinstance(v, int) else -1
+            if want_text and last > 0:
+                return last
+            if not want_text and last <= 1:
+                return last
+            time.sleep(poll)
+        return last
+
+    def _landed_article_id(self, url):
+        """从 success 页 URL 里取出落地文章的 id；不是 success 页返回 ''。"""
+        u = (url or "").rstrip("/")
+        if SUCCESS_URL_MARK not in u:
+            return ""
+        tail = u.split(SUCCESS_URL_MARK)[-1]
+        return tail.split("/")[0].split("?")[0]
+
+    def _submit_and_observe(self, page, target_id, timeout=45):
+        """点弹窗红色「发布文章」，等页面落定。
+
+        返回 (落地文章 id, 落地 url)。落地 id 为空表示没跳 success 页——
+        这时调用方只能靠重开编辑页回读来判断，弹窗关不关一律不算成功。
+        """
+        page.evaluate("() => document.querySelector('button.btn-b-red.ml16')?.click()")
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            time.sleep(1.5)
+            # aqg: top-level boundary 发布中会整页跳转，evaluate 抛异常只当「还在跳」
+            try:
+                url = page.url or ""
+            except Exception:
+                continue
+            got = self._landed_article_id(url)
+            if got:
+                return got, url
+            kind = CaptchaPolicy.detect(page)
+            if kind:
+                raise PlatformError(
+                    f"发布被验证码拦截（{kind}），请用 --headed 跑一次人工过验证")
+            if self._safe_eval(
+                    page,
+                    "(sel) => !document.querySelector(sel)",
+                    PUBLISH_MODAL_BAR_SEL, False):
+                return "", url
+        return "", page.url or ""
+
+    def _readback_editor(self, page, pub, article):
+        """重新打开编辑页回读正文与标题（真往返，不是看当前 DOM 缓存）。
+
+        编辑器有个坑：本地草稿恢复会盖掉文章正文，偶尔把编辑器恢复成空的
+        （2026-09-27 实测同一地址连续两次打开，一次 5952 字、一次空）。
+        所以这里读到空不能直接下结论，重读两次；仍为空才报，而且要把
+        「可能是本地草稿把正文盖了」写进消息——不然会被误当成平台没存。
+        """
+        aid = (pub.get("post_id") or "").strip()
+        edit_url = (pub.get("edit_url") or "").strip()
+        cands = []
+        if edit_url:
+            cands.append(edit_url)
+        if aid:
+            cands.append(EDIT_URL_TMPL.format(article_id=aid))
+        if not cands:
+            self.verify_or_raise("保存后回读", False,
+                                 "publication 里没有 edit_url 也没有 post_id")
+        last = -1
+        opened = ""
+        for url in cands:
+            # aqg: top-level boundary 一个地址打不开不能中断后面的候选
+            try:
+                page.goto(url, timeout=60000, wait_until="domcontentloaded")
+            except Exception:
+                continue
+            last = self._wait_editor(page, want_text=True, timeout=30)
+            if last > 0:
+                opened = url
+                break
+        else:
+            self.verify_or_raise(
+                "保存后回读", False,
+                "重新打开编辑页没读到正文（候选：%s，最后一次编辑器长度 %s）"
+                % ("、".join(cands), last))
+        st = self.read_editor_state(page, EDITOR_SEL, TITLE_SEL)
+        for _ in range(2):
+            if st["body"]:
+                break
+            time.sleep(2)
+            st = self.read_editor_state(page, EDITOR_SEL, TITLE_SEL)
+        if not st["body"]:
+            self.verify_or_raise(
+                "保存后回读", False,
+                f"重新打开 {opened} 后编辑器是空的（CSDN 编辑器的本地草稿恢复会"
+                "盖掉文章正文，实测同一地址连续打开有时 5952 字有时空）。"
+                "重跑一次或人工在网页上确认，不要据此判定更新成功。")
+        return st
+
     # ---------------- 原地更新 ----------------
 
     def update(self, page, pub, article):
-        edit_url = pub.get("edit_url")
-        if not edit_url and pub.get("post_id"):
-            edit_url = f"https://editor.csdn.net/md/?articleId={pub['post_id']}"
+        target_id = (pub.get("post_id") or "").strip()
+        edit_url = (pub.get("edit_url") or "").strip()
+        if not edit_url and target_id:
+            edit_url = EDIT_URL_TMPL.format(article_id=target_id)
         if not edit_url:
             raise PlatformError("没有 edit_url 也没有 post_id，没法原地更新")
 
         page.goto(edit_url, timeout=60000, wait_until="domcontentloaded")
-        try:
-            page.wait_for_selector("pre.editor__inner[contenteditable=true], .CodeMirror",
-                                   timeout=30000)
-        except Exception:
-            pass
-        time.sleep(3)
+        if self._wait_editor(page, want_text=True, timeout=40) <= 0:
+            self.verify_or_raise("更新·打开编辑器", False,
+                                 f"打开 {edit_url} 后编辑器没渲染出正文")
 
-        self._set_cs_editor(page, article.get("content_md", ""))
+        md_content = article.get("content_md", "")
+        # 顺序与 publish 一致：先导正文再设标题——导入会把标题重置成草稿临时名
+        # （端到端测试 70 实锤：先标题后导入 → 发出来标题 = tmpXXXXXX）。
+        if not self._import_md_file(page, md_content):
+            self._set_cs_editor(page, md_content)
         time.sleep(1)
+        if not self._set_title(page, article["title"]):
+            shown = self._safe_eval(
+                page,
+                "() => (document.querySelector('.article-bar__title-display')||{}).innerText || ''",
+                None, "")
+            self.verify_or_raise("更新·标题", False,
+                                 f"标题注入未通过 display 校验（display={shown!r}）")
+
+        # 回读（点发布之前）：导入/输入两条路都可能返回成功但正文没换掉
+        st = self.read_editor_state(page, EDITOR_SEL, TITLE_SEL)
+        c_ok, c_detail = content_evidence(md_content, st["body"])
+        self.verify_or_raise("更新·正文", c_ok, c_detail)
+        t_ok, t_detail = title_evidence(article["title"], st["title"])
+        self.verify_or_raise("更新·标题", t_ok, t_detail)
 
         _click_text(page, ["发布文章", "发布"])
-        time.sleep(2)
-        _click_text(page, ["发布文章", "确定", "确认发布"])
+        time.sleep(4)
+        # 弹窗三件套：不填的话 CSDN 跑完前置检查就不发请求，弹窗一直挂着
+        self._fill_publish_form(page, article, {})
 
-        # 体检 B8 修复（QA 标质力 2026-09-21）：不再盲发——轮询等发布弹窗关闭，
-        # 30s 还挂着就报错（让上层记 failed），而不是 sleep 完直接 return True
-        deadline = time.time() + 30
-        while time.time() < deadline:
-            time.sleep(1.5)
-            if not page.evaluate("() => !!document.querySelector('.modal__button-bar')"):
-                return True
-        raise PlatformError("更新未确认：30s 内发布弹窗未关闭，更新可能没生效")
+        landed, url = self._submit_and_observe(page, target_id)
+
+        # 成功信号：重开编辑页能读到目标正文。弹窗关不关、URL 跳没跳都不算。
+        st2 = self._readback_editor(page, pub, article)
+        if landed and target_id and landed != target_id:
+            self.verify_or_raise(
+                "保存后回读", False,
+                "CSDN 没有原地更新，而是新建了另一篇文章（落地 id=%s，目标 id=%s，"
+                "success 页 %s）。目标文章正文未变，update 判失败；"
+                "新建出来的那篇需要人工删除或改为它继续用。"
+                % (landed, target_id, url))
+        c_ok, c_detail = content_evidence(md_content, st2["body"])
+        self.verify_or_raise("保存后回读·正文", c_ok, c_detail)
+        t_ok, t_detail = title_evidence(article["title"], st2["title"])
+        self.verify_or_raise("保存后回读·标题", t_ok, t_detail)
+        return True

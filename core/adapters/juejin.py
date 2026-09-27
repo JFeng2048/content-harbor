@@ -6,7 +6,13 @@
 
 import time
 
-from core.adapters.base import PlatformAdapter, PlatformError, register
+from core.adapters.base import (
+    PlatformAdapter,
+    PlatformError,
+    content_evidence,
+    register,
+    title_evidence,
+)
 
 AID = "2608"
 API = "https://api.juejin.cn"
@@ -143,6 +149,10 @@ class JuejinAdapter(PlatformAdapter):
     # 草稿编辑器地址模板（发布走 UI 面板必经页）。提成类属性让 E2E mock 可替换。
     editor_url = "https://juejin.cn/editor/drafts/{draft_id}"
 
+    # 发布后轮询「已发布列表」的次数与间隔（提成类属性，便于回归测试缩短）
+    VERIFY_TRIES = 6
+    VERIFY_PAUSE = 2.5
+
     # ---------------- 登录态 ----------------
 
     def check_auth(self, page) -> bool:
@@ -222,13 +232,107 @@ class JuejinAdapter(PlatformAdapter):
 
     # ---------------- 发布 ----------------
 
+    # 掘金「编辑摘要」上限 100 字（2026-09 实测：面板显示 151/100 时
+    # 「确定并发布」点不动，URL 不跳 /post/，草稿一直卡住）。超长必须截断。
+    SUMMARY_MAX = 100
+
+    # ---------------- 回读验证 ----------------
+
+    # 时效兜底的时钟容差（秒）：平台服务器时钟与本机不一定对齐，
+    # 拿整秒时间戳比小数时间戳天然会差零点几秒。
+    FRESH_SLACK = 5
+
+    @classmethod
+    def _row_time(cls, info):
+        """从 article_info 里取这篇的发布/更新时间（秒）。取不到返回 0.0。"""
+        for k in ("ctime", "mtime", "create_time", "update_time"):
+            v = (info or {}).get(k)
+            if v in (None, ""):
+                continue
+            try:
+                n = int(v)
+            except (TypeError, ValueError):
+                continue
+            # 13 位是毫秒时间戳，10 位按秒处理
+            return n / 1000.0 if n > 1e11 else float(n)
+        return 0.0
+
+    def _find_published(self, page, title, article_id="", since=None, notes=None):
+        """回读验证：到「已发布列表」里查这篇文章，返回它的 article_id。
+
+        为什么不能只看 URL：2026-09 掘金前端点完「确定并发布」只发
+        article_draft/update，压根不发 article/publish——URL 停在编辑器、
+        面板按钮点得再准也不会真发出去。列表接口里 status==2 才是唯一可信
+        的「真的发出去了」证据。只按标题匹配不够：库里可能本来就有一篇同名
+        草稿（status=1），所以必须同时满足 status==2。
+
+        证据强度不能倒挂（2026-09 审查 critical）：URL 里已经带出本次发布的
+        article_id 时，它就是唯一强证据——只认 id 相等。旧实现用 `or` 让
+        「标题相同」这个弱证据覆盖它，于是「账号里已有一篇同名已发布文章 +
+        本次根本没发出去」会回读到那条旧文章，返回 draft_only=False +
+        旧文章 id，新草稿被丢弃：又造了一次假成功，而且方向与本轮目标相反。
+        标题兜底只在 URL 没给出 id 时启用，并且必须叠加时效条件——同名那条
+        要比本次 publish 的起点更新，否则就是历史文章，不能当成本次的证据。
+        读不到 ctime/mtime 时同样不采信：无法证明它就是本次这一篇。
+
+        notes（可选 list）：把"看到过但没采信"的行记进去，拼进错误消息，
+        免得人工只看到一句"查不到"，还得自己去猜为什么。
+        """
+        uid = self._user_id(page)
+        want_title = (title or "").strip()
+        want_id = str(article_id or "").strip()
+        floor = (float(since) - self.FRESH_SLACK) if since else None
+        rejected = []
+        for attempt in range(self.VERIFY_TRIES):
+            data = self.api_get(
+                page,
+                f"{API}/content_api/v1/article/query_list"
+                f"?aid={AID}&user_id={uid}&sort_type=2&cursor=0",
+            )
+            for row in data.get("data") or []:
+                info = row.get("article_info") or {}
+                if info.get("status") != 2:
+                    continue
+                rid = str(row.get("article_id") or "")
+                rtitle = (row.get("title") or "").strip()
+                if want_id:
+                    hit = rid == want_id
+                    if not hit and rid and rtitle == want_title:
+                        rejected.append(
+                            f"已发布列表里有一篇同名文章 id={rid}，"
+                            f"但本次页面给出的是 id={want_id}，两者不是同一篇")
+                else:
+                    hit = bool(want_title) and rtitle == want_title
+                    if hit and floor is not None:
+                        # 时效兜底：同名那条必须是本次发布之后才出现的。
+                        row_time = self._row_time(info)
+                        if row_time < floor:
+                            hit = False
+                            rejected.append(
+                                f"已发布列表里有一篇同名文章 id={rid}，"
+                                f"但它的发布时间早于本次发布（不采信为本次结果）")
+                        elif row_time <= 0:
+                            rejected.append(
+                                f"已发布列表里有一篇同名文章 id={rid}，"
+                                f"但 article_info 里读不到 ctime/mtime，没法证明它是本次发布的")
+                if hit and rid:
+                    return rid
+            if attempt + 1 < self.VERIFY_TRIES:
+                time.sleep(self.VERIFY_PAUSE)
+        if notes is not None and rejected:
+            notes.append("；".join(rejected[:3]))
+        return ""
+
     def publish(self, page, article, options=None):
         options = options or {}
+        # 本次发布的起点：标题兜底回读要靠它判断「同名那条是不是本次新出现的」
+        started = time.time()
         cat = options.get("category") or DEFAULT_CATEGORY
         cat_id = CATEGORIES.get(cat) or CATEGORIES[DEFAULT_CATEGORY]
         brief = article.get("summary") or (
             article.get("content_md", "")[:100].replace("\n", " ")
         )
+        brief = brief.strip()[:self.SUMMARY_MAX]
 
         # 确保在掘金域名下（cookie 需要）。goto 失败不拦：page 若已在
         # juejin.cn 域（首页能开）就继续走 API；风控页打不开也尽力发 API
@@ -276,8 +380,8 @@ class JuejinAdapter(PlatformAdapter):
         # ====== 掘金 2026-09：publish API 已封死，走 UI 面板发布 ======
         # 流程：进编辑器 → 点"发布"按钮开面板 → 点"确定并发布"
         # 注意：2026-09 前端点"确定并发布"后只发 article_draft/update，
-        # 不发 article/publish。如果 URL 没跳到 /post/xxx，说明发布未成功。
-        # 此时返回 draft-only 结果，用户需手动在浏览器里点一次"确定并发布"。
+        # 不发 article/publish。点得再准也可能什么都没发出去，所以点完必须
+        # 回读「已发布列表」；查不到就抛错，绝不回落成成功语义。
 
         # 1. 进草稿编辑器
         page.goto(
@@ -306,14 +410,24 @@ class JuejinAdapter(PlatformAdapter):
                 pass
         time.sleep(10)
 
-        # 4. 检查 URL 是否跳到 /post/xxx
-        article_id = ""
-        for _ in range(5):
-            if "/post/" in page.url:
-                article_id = page.url.split("/post/")[-1].split("?")[0].split("/")[0]
-                break
-            time.sleep(2)
-
+        # 4. 回读验证：唯一可信证据是「已发布列表」里出现这篇 status=2 的文章。
+        #    URL 跳 /post/ 只是线索——平台压根不发 publish 请求时它不会跳，
+        #    但反过来（历史上出现过）URL 跳了也未必落库，列表接口说了算。
+        from_url = ""
+        if "/post/" in (page.url or ""):
+            from_url = page.url.split("/post/")[-1].split("?")[0].split("/")[0]
+        # aqg: top-level boundary 回读接口本身挂了也要把草稿地址带出去，
+        # 否则运营方只看到一句 HTTP 500，找不到那条已经建好的草稿
+        notes = []
+        try:
+            article_id = self._find_published(
+                page, article["title"], from_url, since=started, notes=notes)
+        except PlatformError as e:
+            self.save_debug(page, "juejin_publish_verify_failed")
+            raise PlatformError(
+                f"{e}｜无法确认是否发布成功，但草稿已创建："
+                f"https://juejin.cn/editor/drafts/{draft_id}，"
+                f"请人工到该地址核对发布状态。")
         if article_id:
             return {
                 "post_id": article_id,
@@ -322,16 +436,26 @@ class JuejinAdapter(PlatformAdapter):
                 "draft_only": False,
             }
 
-        # 5. 发布未成功——返回 draft-only（用户可手动在浏览器里完成最后一步）
-        return {
-            "post_id": draft_id,
-            "post_url": "",
-            "edit_url": f"https://juejin.cn/editor/drafts/{draft_id}",
-            "draft_only": True,
-            "warning": "掘金 2026-09 版 publish API 变更，自动发布未成功，草稿已创建，请手动在浏览器里点'确定并发布'",
-        }
+        # 5. 证不出来 = 没发出去。抛错而不是回落成「成功 + warning」：
+        #    草稿 ID 与编辑地址写进消息里，人工点一次「确定并发布」即可补上。
+        #    不再建议走「原地更新补状态」——那条路径依赖库里已有 post_id，
+        #    而此刻发布没生效，post_id 要么是空的、要么是同名的旧文章 id，
+        #    照着做只会再撞一次同样的坑。
+        self.save_debug(page, "juejin_publish_unconfirmed")
+        raise PlatformError(
+            f"掘金自动发布未生效：点完「确定并发布」后，已发布列表里查不到"
+            f"《{article['title']}》（status=2）。"
+            + (f"（{'；'.join(notes)}）" if notes else "")
+            + f"草稿已创建，"
+            f"请到 https://juejin.cn/editor/drafts/{draft_id} "
+            f"手动点一次「确定并发布」，并到「已发布」列表确认拿到真实文章 ID 后，"
+            f"再回本系统改这条记录。"
+        )
 
     # ---------------- 原地更新 ----------------
+
+    EDITOR_SEL = ".CodeMirror"
+    TITLE_SEL = 'input[placeholder*="标题"], .title-input'
 
     def update(self, page, pub, article):
         edit_url = (
@@ -352,11 +476,35 @@ class JuejinAdapter(PlatformAdapter):
         except Exception:
             pass
 
-        self.set_editor_content(page, article.get("content_md", ""))
+        md_content = article.get("content_md", "")
+        self.set_editor_content(page, md_content)
         time.sleep(1)
+
+        # 点「发布」之前先回读 CodeMirror：set_editor_content 三级降级里
+        # 前两级都可能「返回成功但编辑器里还是旧内容」。
+        self.require_content(
+            page, md_content, article["title"],
+            self.EDITOR_SEL, self.TITLE_SEL, "正文注入",
+        )
 
         _click_text(page, ["发布", "发布文章"])
         time.sleep(1.5)
         _click_text(page, ["确定并发布", "确认发布", "并发布"])
         time.sleep(4)
+
+        # 回读验证：重新打开编辑页把 CodeMirror 读回来，确认存进去的就是这一篇。
+        # 上层 update_single 会丢弃本函数的返回值直接按成功记账，所以只能抛错。
+        page.goto(edit_url, timeout=60000, wait_until="domcontentloaded")
+        page.wait_for_selector(".CodeMirror", timeout=30000)
+        time.sleep(2)
+        st = self.read_editor_state(page, self.EDITOR_SEL, self.TITLE_SEL)
+        # aqg: top-level boundary 回读不过先存现场再抛（人工接手要看的就是这一刻）
+        try:
+            c_ok, c_detail = content_evidence(md_content, st["body"])
+            self.verify_or_raise("保存后回读·正文", c_ok, c_detail)
+            t_ok, t_detail = title_evidence(article["title"], st["title"])
+            self.verify_or_raise("保存后回读·标题", t_ok, t_detail)
+        except PlatformError:
+            self.save_debug(page, "juejin_update_unverified")
+            raise
         return True
