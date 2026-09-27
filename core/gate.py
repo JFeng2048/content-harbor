@@ -10,8 +10,10 @@ OWASP Agentic Top10「输出不可信 / 工具滥用 / 目标劫持」的落地�
      平台若支持元数据则携带，至少入库可追溯（法规要求"显式标识"）
   3. 双模型审查 —— 配了 REVIEW_MODEL 用第二模型审一遍（事实/口径/合规），
      未配则降级本地 heuristic 审查（确定性检查，不依赖外网）
-  4. 发布闸门 —— source=ai 的文章强制 draft_only，必须人工二次确认
-     才能正式 publish（人审 in-the-loop，防 AI 内容直接裸奔上线）
+  4. 发布闸门 —— source=ai 的文章默认强制 draft_only，必须人工二次确认
+     才能正式 publish（人审 in-the-loop，防 AI 内容直接裸奔上线）。
+     运营方显式配 AI_DIRECT_PUBLISH=true 可放开直发，但 1-3 道闸门一律不变，
+     AIGC 显式标识也照打不误。
 
 设计原则：
   - 纯本地 heuristic 是底线，保证无网/无第二模型时门禁仍生效
@@ -63,6 +65,19 @@ def is_enabled() -> bool:
 
 def is_ai_sourced(article: dict) -> bool:
     return article.get("source") == "ai"
+
+
+def ai_direct_publish_allowed() -> bool:
+    """AI 源文章能否跳过"必须先发草稿等人审"这一环。
+
+    默认否——保持人审闸门（AI 内容不裸奔上线）。运营方显式配
+    `AI_DIRECT_PUBLISH=true` 才放开；这只放开**发布形式**，
+    安全扫描、二审、AIGC 显式标识一律不受影响，仍是硬闸。
+    """
+    v = _cfg("AI_DIRECT_PUBLISH", False)
+    if isinstance(v, bool):
+        return v
+    return str(v).strip().lower() in ("true", "1", "yes", "on")
 
 
 def scan_dangerous(content: str, title: str = "") -> list:
@@ -153,10 +168,26 @@ def dual_model_review(article: dict) -> dict:
     if review_model:
         try:
             from core import ai as ai_mod
-            prompt = (f"你是内容合规审查员。审查下面文章是否可安全发布："
-                      f"事实是否有明显错误、口径是否稳妥、是否含敏感/违法/恶意内容。"
-                      f"只输出 JSON: {{\"verdict\":\"pass\"|\"reject\",\"issues\":[...]}}\n\n"
-                      f"标题: {article.get('title','')}\n\n{article.get('content_md','')[:6000]}")
+            # 时间基准 + 判定纪律都写进提示：二审模型常有自己的时钟（会把
+            # 当年 9 月当成"未来"），也常按关键词误杀「不绕过」这类合规声明。
+            # 这两条是实测踩出来的：前者把正确的实测日期判成时间线矛盾，
+            # 后者把"不伪造互动数据"的自我约束判成协助伪造。
+            today = time.strftime("%Y-%m-%d")
+            prompt = (
+                f"你是内容合规审查员。今天是 {today}——文章里出现的日期以今天为"
+                f"基准判断，不要用自己的时钟推断时间线穿帮。\n"
+                f"审查下面文章是否可安全发布：事实是否有明显错误、口径是否稳妥、"
+                f"是否含敏感/违法/恶意内容。\n"
+                f"判定纪律（必须遵守，否则会误杀正常的技术文章）：\n"
+                f"1) 只有当文章**提供了**违规能力（可直接用于绕过验证、伪造数据、"
+                f"侵入他人账号的具体方法或代码）时才判 high；\n"
+                f"2) 「不绕过」「不伪造」「仅限自己账号」这类禁止性表述属于合规声明，"
+                f"不构成风险，不要因为句子里出现这些词就判 reject；\n"
+                f"3) 讲排障过程（现象→排查→根因→修法）是技术写作的正当内容，"
+                f"除非步骤可直接用于攻击他人，否则不判 high；\n"
+                f"4) 每条 issue 必须引用文章原句作为依据，指不出原句就别写进 issues。\n"
+                f"只输出 JSON: {{\"verdict\":\"pass\"|\"reject\",\"issues\":[...]}}\n\n"
+                f"标题: {article.get('title','')}\n\n{article.get('content_md','')[:6000]}")
             raw = ai_mod.chat([{"role": "user", "content": prompt}], model=review_model,
                               temperature=0.0, max_tokens=500)
             m = re.search(r"\{[\s\S]*\}", raw)
@@ -181,25 +212,30 @@ class GateError(Exception):
 
 
 def gate_publish(article: dict, draft_only: bool = False) -> dict:
-    """发布前强制过闸。AI 源文章非 draft_only 时直接拒（人审闸门）。
+    """发布前强制过闸。AI 源文章默认强制 draft_only（人审闸门），
+    除非显式开启 AI_DIRECT_PUBLISH。
 
-    返回 {approved, issues, aigc_labeled, review}。
+    返回 {approved, issues, aigc_labeled, ai_direct_publish, review}。
     """
     if not is_enabled():
         return {"approved": True, "issues": [], "aigc_labeled": False,
+                "ai_direct_publish": ai_direct_publish_allowed(),
                 "review": {"verdict": "skipped", "issues": [], "reviewer": "gate-off"}}
 
     review = dual_model_review(article)
-    approved = (review["verdict"] == "pass") and (draft_only or not is_ai_sourced(article))
+    ai_source = is_ai_sourced(article)
+    direct_ok = ai_direct_publish_allowed()
+    # 草稿 / 非 AI 源 / 显式放开直发 —— 三者之一即可放行；审查本身必须 pass
+    approved = (review["verdict"] == "pass") and (draft_only or not ai_source
+                                                  or direct_ok)
     issues = list(review["issues"])
 
-    # AI 源非草稿发布 -> 人审闸门拦
-    if review["verdict"] == "pass" and is_ai_sourced(article) and not draft_only:
-        approved = False
+    # AI 源且非草稿且未放开直发 -> 人审闸门拦
+    if review["verdict"] == "pass" and ai_source and not draft_only and not direct_ok:
         issues.append("AI 生成内容须先以草稿(draft_only)发布并经人工确认，禁止直接上线")
 
-    return {"approved": approved, "issues": issues, "aigc_labeled": is_ai_sourced(article),
-            "review": review}
+    return {"approved": approved, "issues": issues, "aigc_labeled": ai_source,
+            "ai_direct_publish": direct_ok, "review": review}
 
 
 def apply_gate_before_publish(article: dict, draft_only: bool = False) -> dict:

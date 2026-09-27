@@ -643,8 +643,8 @@ class Hub:
     def ai_write(self, topic, style="", words=2000, tags_hint="", publish_to=None):
         """AI 写一篇并入库。传了 publish_to 就顺手发出去。
 
-        合规闸门：AI 源文章发布强制 draft_only（人审闸门），禁止 AI 内容
-        直接正式上线。想上线须人工二次确认后再调 publish(draft_only=False)。
+        合规闸门：AI 源文章默认强制 draft_only（人审闸门）；运营方显式配
+        AI_DIRECT_PUBLISH=true 才允许直接正式上线（安全扫描/二审/AIGC 标识不变）。
         """
         if self.demo:
             art = self._demo_article(topic, style, words, tags_hint)
@@ -673,13 +673,17 @@ class Hub:
             "tags": art["tags"],
             "chars": len(art["content_md"]),
             "aigc_labeled": True,
+            "style_source": art.get("style_source", ""),
         }
         if publish_to:
-            # 人审闸门：AI 内容只发草稿，正式上线需人工确认后单独 publish
-            out["publish"] = self.publish(aid, publish_to, draft_only=True)
+            direct = aigc_gate.ai_direct_publish_allowed()
+            out["publish"] = self.publish(aid, publish_to, draft_only=not direct)
             out["note"] = (
                 "AI 内容已按合规闸门以草稿(draft_only)发布；"
                 "确认无误后请调 /articles/{id}/publish(draft_only=false) 正式上线"
+                if not direct else
+                "AI_DIRECT_PUBLISH 已开启：AI 内容经门禁审查后直接正式发布，"
+                "文末保留 AIGC 显式标识"
             )
         return out
 
@@ -691,10 +695,16 @@ class Hub:
         if not art:
             raise ValueError(f"文章 {article_id} 不存在")
         new_md = ai_mod.rewrite(art["content_md"], instruction)
-        db.update_article(self.conn, article_id, content_md=new_md)
+        # 改写会整篇覆盖正文，AIGC 文末声明必须补回（合规标识不可丢）
+        art["content_md"] = new_md
+        if aigc_gate.is_ai_sourced(art):
+            art = aigc_gate.add_aigc_label(art, art.get("ai_model", ""))
+            db.update_article(self.conn, article_id, content_md=art["content_md"])
+        else:
+            db.update_article(self.conn, article_id, content_md=new_md)
         out = {
             "id": article_id,
-            "chars": len(new_md),
+            "chars": len(art["content_md"]),
             "pending_sync": len(db.get_pending_updates(self.conn)),
         }
         if publish_to:
@@ -708,7 +718,11 @@ class Hub:
         if not art:
             raise ValueError(f"文章 {article_id} 不存在")
         new_md = ai_mod.polish(art["content_md"])
-        db.update_article(self.conn, article_id, content_md=new_md)
+        # 同 ai_rewrite：润色覆盖正文后补回 AIGC 标识
+        art["content_md"] = new_md
+        if aigc_gate.is_ai_sourced(art):
+            art = aigc_gate.add_aigc_label(art, art.get("ai_model", ""))
+        db.update_article(self.conn, article_id, content_md=art["content_md"])
         return {
             "id": article_id,
             "pending_sync": len(db.get_pending_updates(self.conn)),
@@ -1032,8 +1046,17 @@ class Hub:
             return {"platform": platform, "ok": True}
         # aqg: top-level boundary（失败记账后重抛，publish_single 对称）
         except Exception as e:
+            # status="failed" 不能省：db.upsert_publication 对已有行只更新非 None
+            # 字段，只传 last_error 的话 status 会停在上一次的 "ok"——于是台账
+            # 显示"已同步成功"、平台正文还是旧的。本批让 PlatformError 抛出频率
+            # 大幅上升，这条漏记会成批出现。
             db.upsert_publication(
-                self.conn, article_id, platform, account, last_error=str(e)[:300]
+                self.conn,
+                article_id,
+                platform,
+                account,
+                status="failed",
+                last_error=str(e)[:300],
             )
             db.finish_job(self.conn, job, False, str(e)[:300])
             raise

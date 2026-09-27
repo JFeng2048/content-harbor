@@ -549,12 +549,18 @@ def ai_gate():
     """AIGC 合规门禁状态：开关、审查模型、高危词数、最近拒绝。"""
     from core import gate as g
 
+    direct_ok = g.ai_direct_publish_allowed()
     snap = {
         "enabled": g.is_enabled(),
         "review_model": g._cfg("REVIEW_MODEL", "").strip()
         or "(未配置，走本地 heuristic)",
         "dangerous_terms": len(g.DANGEROUS_PATTERNS),
-        "human_review_gate": "AI 源内容禁止直接 publish，须 draft_only + 人工确认",
+        "ai_direct_publish": direct_ok,
+        "human_review_gate": (
+            "AI 源内容已放开直发（AI_DIRECT_PUBLISH=true）：仍强制安全扫描+二审+AIGC 标识"
+            if direct_ok else
+            "AI 源内容禁止直接 publish，须 draft_only + 人工确认"
+        ),
     }
     # 最近 10 条被门禁拒绝的发布（jobs 里 failed 且 message 含 门禁/高危/人工）
     try:

@@ -4,6 +4,12 @@
   "AI_API_KEY": "sk-xxx",
   "AI_BASE_URL": "https://api.deepseek.com/v1",
   "AI_MODEL": "deepseek-chat",
+  "REVIEW_MODEL": "",
+  "_REVIEW_MODEL": "二审模型（可选）。填了走 LLM 事实/合规二审，空则走本地 heuristic。建议与 AI_MODEL 不同模型。",
+  "AI_DIRECT_PUBLISH": false,
+  "_AI_DIRECT_PUBLISH": "AI 稿能否直接正式发布。false=默认先发草稿等人审（人审闸门）；true=经安全扫描+二审+AIGC 标识后直接上线。",
+  "WRITING_STYLE_FILE": "",
+  "_WRITING_STYLE_FILE": "写作风格档案路径（可选）。留空用 docs/writing-style.md；core/ai.py 每次写稿/改写/润色都注入它。",
 
   "_AI_BASE_URL_备选": {
     "DeepSeek": "https://api.deepseek.com/v1",
