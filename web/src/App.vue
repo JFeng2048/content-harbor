@@ -49,9 +49,9 @@
         <EmptyState
           :px="58"
           title="墨迹未干"
-          desc="挑一篇接着写，或新起一稿。写完点右上「发布」一发出网。"
+          desc="挑一篇接着写，或新起一篇。写完点右上「发布」一发出网。"
         >
-          <el-button type="primary" :icon="Plus" @click="hub.newArticle()">起一稿新文</el-button>
+          <el-button type="primary" :icon="Plus" @click="hub.newArticle()">起一篇新文</el-button>
           <el-button :icon="MagicStick" @click="aiDialog = true">让 AI 落笔</el-button>
         </EmptyState>
       </div>

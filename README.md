@@ -1,8 +1,8 @@
-# 一稿 YiGao · AI 内容中台
+# 内容港 Harbor · AI 内容中台
 
 > [English](README.en.md) · 中文
 
-> **一稿写，全网发。** 文章存在你自己的库里，AI 通过 API / MCP 全权管理：写、改、发、更新、看账号全部内容。
+> **内容进港，全网分发。** 文章存在你自己的库里，AI 通过 API / MCP 全权管理：写、改、发、更新、看账号全部内容。
 > 自带内置浏览器，扫码登录一次就长期在线，不依赖你日常的 Chrome / Edge 开着。
 
 <p>
@@ -15,7 +15,7 @@
   <img alt="国内模型" src="https://img.shields.io/badge/AI-DeepSeek%20%2F%20豆包%20%2F%20通义-brightgreen">
 </p>
 
-![一稿 · 主界面（晴空主题）](docs/screenshots/01-home.png)
+![内容港 · 主界面（晴空主题）](docs/screenshots/01-home.png)
 
 <table>
   <tr>
@@ -36,8 +36,8 @@
 ## 快速开始
 
 ```bash
-git clone https://gitcode.com/badhope/ai-content-hub.git
-cd ai-content-hub
+git clone https://gitcode.com/badhope/content-harbor.git
+cd content-harbor
 pip install -r requirements.txt
 python3 -m patchright install chromium   # 反检测浏览器；国内网络失败时自动复用预装 playwright chromium
 
@@ -531,7 +531,7 @@ dump_dom(page, "csdn_list")     # HTML 存到 data/debug/
 ## 十四、目录结构
 
 ```
-ai-content-hub/
+content-harbor/
 ├─ cli.py                  命令行入口（16 个命令）
 ├─ config.example.json     凭据模板（复制为 config.json）
 ├─ core/
@@ -593,10 +593,10 @@ ai-content-hub/
 
 | 平台 | 地址 |
 |---|---|
-| **GitCode（主）** | <https://gitcode.com/badhope/ai-content-hub> |
-| Gitee（国内镜像） | <https://gitee.com/badhope/ai-content-hub> |
-| GitHub（国际镜像） | <https://github.com/x33834/ai-content-hub> |
-| GitHub（国际镜像 2） | <https://github.com/Morningstar202604/ai-content-hub> |
+| **GitCode（主）** | <https://gitcode.com/badhope/content-harbor> |
+| Gitee（国内镜像） | <https://gitee.com/badhope/content-harbor> |
+| GitHub（国际镜像） | <https://github.com/x33834/content-harbor> |
+| GitHub（国际镜像 2） | <https://github.com/Morningstar202604/content-harbor> |
 
 ## 许可证
 

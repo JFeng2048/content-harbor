@@ -76,7 +76,7 @@ def _check_rate(name: str) -> bool:
 # MCP 工具定义（保留原 13 个，语义不变）
 # ---------------------------------------------------------------------------
 mcp = MCPServer(
-    name="ai-content-hub",
+    name="content-harbor",
     instructions="AI 内容中台：管理文章库、平台发布、AI 写稿、同步与合规门禁",
 )
 

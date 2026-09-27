@@ -1,4 +1,4 @@
-# YiGao · Self-hosted AI Content Hub
+# Harbor · Self-hosted AI Content Hub
 
 > **Write once, publish everywhere.** Your articles live in your own database; an AI (or any script) manages the full lifecycle — write, edit, publish, update, and list across 10 Chinese tech platforms.
 
@@ -21,8 +21,8 @@
 ## Quick Start
 
 ```bash
-git clone https://gitcode.com/badhope/ai-content-hub.git
-cd ai-content-hub
+git clone https://gitcode.com/badhope/content-harbor.git
+cd content-harbor
 pip install -r requirements.txt
 python3 -m patchright install chromium
 

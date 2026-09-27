@@ -151,7 +151,7 @@ END
 ## 6. 目录结构（增量）
 
 ```
-ai-content-hub/
+content-harbor/
 ├── ARCHITECTURE.md          # 本文（唯一真理源）
 ├── workflows/               # 🆕 工作流引擎层
 │   ├── __init__.py
