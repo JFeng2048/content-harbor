@@ -1,4 +1,4 @@
-# 内容港 Harbor · AI 内容中台
+# 内容港 Harbor
 
 > [English](README.en.md) · 中文
 
