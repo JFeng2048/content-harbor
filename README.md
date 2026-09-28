@@ -11,7 +11,7 @@
   <img alt="fastapi" src="https://img.shields.io/badge/API-FastAPI-teal">
   <img alt="mcp" src="https://img.shields.io/badge/AI-MCP-orange">
   <img alt="platforms" src="https://img.shields.io/badge/platforms-10-blueviolet">
-  <img alt="GitCode" src="https://img.shields.io/badge/GitCode-badhope%2Fai--content--hub-1a73e8">
+  <img alt="GitCode" src="https://img.shields.io/badge/GitCode-badhope%2Fcontent--harbor-1a73e8">
   <img alt="国内模型" src="https://img.shields.io/badge/AI-DeepSeek%20%2F%20豆包%20%2F%20通义-brightgreen">
 </p>
 
