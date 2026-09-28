@@ -1,0 +1,64 @@
+.s.s.s.s.sssssssssssssssssssssssssssssss                                 [100%]
+============================== warnings summary ===============================
+schemas\article.py:155
+  e:\code\opensouece\ai-content-hub\backed\schemas\article.py:155: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ArticleUpdate(BaseModel):
+
+schemas\article.py:331
+  e:\code\opensouece\ai-content-hub\backed\schemas\article.py:331: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ArticleStatusUpdate(BaseModel):
+
+schemas\article.py:357
+  e:\code\opensouece\ai-content-hub\backed\schemas\article.py:357: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ArticleResponse(BaseModel):
+
+schemas\publication.py:165
+  e:\code\opensouece\ai-content-hub\backed\schemas\publication.py:165: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class PublicationUpdate(BaseModel):
+
+schemas\publication.py:355
+  e:\code\opensouece\ai-content-hub\backed\schemas\publication.py:355: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class PublicationStatusUpdate(BaseModel):
+
+schemas\publication.py:381
+  e:\code\opensouece\ai-content-hub\backed\schemas\publication.py:381: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class PublicationResponse(BaseModel):
+
+schemas\account.py:85
+  e:\code\opensouece\ai-content-hub\backed\schemas\account.py:85: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class AccountUpdate(BaseModel):
+
+schemas\account.py:163
+  e:\code\opensouece\ai-content-hub\backed\schemas\account.py:163: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class AccountStatusUpdate(BaseModel):
+
+schemas\account.py:189
+  e:\code\opensouece\ai-content-hub\backed\schemas\account.py:189: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class AccountResponse(BaseModel):
+
+schemas\job.py:105
+  e:\code\opensouece\ai-content-hub\backed\schemas\job.py:105: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class JobUpdate(BaseModel):
+
+schemas\job.py:211
+  e:\code\opensouece\ai-content-hub\backed\schemas\job.py:211: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class JobStatusUpdate(BaseModel):
+
+schemas\job.py:237
+  e:\code\opensouece\ai-content-hub\backed\schemas\job.py:237: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class JobResponse(BaseModel):
+
+schemas\task.py:175
+  e:\code\opensouece\ai-content-hub\backed\schemas\task.py:175: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class TaskUpdate(BaseModel):
+
+schemas\task.py:379
+  e:\code\opensouece\ai-content-hub\backed\schemas\task.py:379: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class TaskStatusUpdate(BaseModel):
+
+schemas\task.py:405
+  e:\code\opensouece\ai-content-hub\backed\schemas\task.py:405: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class TaskResponse(BaseModel):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+5 passed, 35 skipped, 15 warnings in 0.58s

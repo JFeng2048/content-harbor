@@ -1,0 +1,100 @@
+# MySQL生产环境配置文件
+# 针对生产环境高性能优化
+
+[mysqld]
+# 基本配置
+default-storage-engine = InnoDB
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+default-time-zone = '+08:00'
+
+# 连接配置
+max_connections = 500
+max_connect_errors = 10000
+wait_timeout = 28800
+interactive_timeout = 28800
+connect_timeout = 60
+
+# 内存配置（生产环境）
+innodb_buffer_pool_size = 1G
+innodb_buffer_pool_instances = 4
+innodb_log_file_size = 256M
+innodb_log_buffer_size = 64M
+key_buffer_size = 128M
+tmp_table_size = 64M
+max_heap_table_size = 64M
+sort_buffer_size = 2M
+read_buffer_size = 2M
+read_rnd_buffer_size = 8M
+join_buffer_size = 2M
+
+# 查询缓存（8.0版本已废弃，但保留配置）
+# query_cache_type = 0
+# query_cache_size = 0
+
+# 慢查询日志
+slow_query_log = 1
+slow_query_log_file = /var/log/mysql/mysql-slow.log
+long_query_time = 1
+log_queries_not_using_indexes = 1
+min_examined_row_limit = 1000
+
+# 错误日志
+log_error = /var/log/mysql/error.log
+log_error_verbosity = 2
+
+# 二进制日志
+log_bin = mysql-bin
+binlog_format = ROW
+binlog_expire_logs_seconds = 604800  # 7天
+max_binlog_size = 100M
+binlog_cache_size = 32K
+sync_binlog = 1
+
+# 中继日志
+relay_log = mysql-relay
+relay_log_recovery = 1
+
+# 安全配置
+local_infile = 0
+secure_file_priv = /var/lib/mysql-files/
+sql_mode = STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO
+
+# InnoDB优化
+innodb_file_per_table = 1
+innodb_flush_log_at_trx_commit = 1
+innodb_flush_method = O_DIRECT
+innodb_lock_wait_timeout = 50
+innodb_rollback_on_timeout = 1
+innodb_print_all_deadlocks = 1
+innodb_open_files = 4000
+innodb_io_capacity = 200
+innodb_io_capacity_max = 2000
+innodb_thread_concurrency = 0
+innodb_read_io_threads = 4
+innodb_write_io_threads = 4
+innodb_purge_threads = 4
+innodb_page_cleaners = 4
+
+# 表缓存
+table_open_cache = 4000
+table_definition_cache = 2000
+
+# 线程配置
+thread_cache_size = 50
+thread_stack = 256K
+
+# 网络配置
+max_allowed_packet = 64M
+net_buffer_length = 32K
+back_log = 500
+
+# 监控配置
+performance_schema = ON
+innodb_monitor_enable = all
+
+[mysql]
+default-character-set = utf8mb4
+
+[client]
+default-character-set = utf8mb4

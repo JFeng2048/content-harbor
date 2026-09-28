@@ -1,0 +1,17 @@
+# =============================================================================
+# Grafana仪表板配置
+# =============================================================================
+
+apiVersion: 1
+
+providers:
+  - name: 'FastAPI Security Demo'
+    orgId: 1
+    folder: ''
+    folderUid: ''
+    type: file
+    disableDeletion: false
+    editable: true
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
