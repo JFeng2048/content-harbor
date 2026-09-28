@@ -20,7 +20,7 @@
 
 <script setup>
 defineProps({
-  name: { type: String, default: '内容港' },
+  name: { type: String, default: '内容港 Harbor' },
   sub: { type: String, default: '内容进港 · 全网分发' },
   px: { type: Number, default: 28 },
   withName: { type: Boolean, default: true },
