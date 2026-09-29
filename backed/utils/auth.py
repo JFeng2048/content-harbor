@@ -2,7 +2,7 @@
 
 不绑定具体业务模型。密钥等参数由调用方注入；本项目通过底部懒加载读取 config。
 
-业务认证（查 SsoUser）请用 ``core.permissions.get_current_user``。
+业务认证依赖见 ``core.permissions.get_current_active_user``。
 本模块的 ``get_token_payload`` 仅解析 JWT 载荷，不查库。
 """
 

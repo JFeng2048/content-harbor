@@ -13,7 +13,7 @@
 from fastapi import APIRouter, Depends, Path, Query, status
 
 from core.permissions import get_current_active_user
-from service.dependencies import get_task_service
+from service import get_task_service
 from service.task_service import TaskService
 from schemas.task import (
     TaskCreate,

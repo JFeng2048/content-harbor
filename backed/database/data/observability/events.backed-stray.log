@@ -1,0 +1,6 @@
+{"ts": 1790609952.4392252, "event": "api.access", "level": "info", "pid": 28296, "method": "GET", "path": "/status", "status": 200, "duration": 0.046, "client_ip": "testclient"}
+{"ts": 1790609952.4442506, "event": "api.access", "level": "info", "pid": 28296, "method": "GET", "path": "/status", "status": 200, "duration": 0.001, "client_ip": "testclient"}
+{"ts": 1790609952.447252, "event": "api.access", "level": "info", "pid": 28296, "method": "GET", "path": "/platforms", "status": 200, "duration": 0.001, "client_ip": "testclient"}
+{"ts": 1790609952.4694824, "event": "api.access", "level": "info", "pid": 28296, "method": "GET", "path": "/platforms", "status": 200, "duration": 0.001, "client_ip": "testclient"}
+{"ts": 1790609952.473483, "event": "api.access", "level": "info", "pid": 28296, "method": "GET", "path": "/articles", "status": 200, "duration": 0.001, "client_ip": "testclient"}
+{"ts": 1790609952.477482, "event": "api.access", "level": "info", "pid": 28296, "method": "GET", "path": "/articles", "status": 200, "duration": 0.001, "client_ip": "testclient"}

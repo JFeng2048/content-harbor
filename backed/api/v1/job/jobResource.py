@@ -13,7 +13,7 @@
 from fastapi import APIRouter, Depends, Path, Query, status
 
 from core.permissions import get_current_active_user
-from service.dependencies import get_job_service
+from service import get_job_service
 from service.job_service import JobService
 from schemas.job import (
     JobCreate,

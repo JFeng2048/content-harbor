@@ -1,33 +1,12 @@
-# =============================================================================
-# FastAPI 企业起步依赖（与 starter requirements 对齐，可按环境裁剪）
-# 安装：pip install -r requirements.txt
-# =============================================================================
+# 后端
+fastapi>=0.110
+uvicorn>=0.27
+pydantic>=2.5
+requests>=2.31
+markdown>=3.5    # 知乎/B站/头条等富文本编辑器发布时 Markdown 转 HTML
+mcp>=1.0         # MCP 官方 SDK（server/mcp_server.py 用，替代原手写 JSON-RPC）
 
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-pydantic>=2.12.0
-pydantic-settings>=2.7.0
-python-multipart==0.0.20
-email-validator>=2.2.0
-
-sqlalchemy[asyncio]==2.0.34
-alembic==1.13.3
-aiosqlite==0.20.0
-aiomysql==0.2.0
-
-PyJWT==2.8.0
-passlib[bcrypt]==1.7.4
-bcrypt>=4.2.1
-cryptography>=44.0.0
-
-redis==5.2.1
-
-python-dotenv==0.21.0
-PyYAML==6.0.1
-tenacity==8.2.3
-python-json-logger==2.0.7
-
-pytest==8.3.4
-pytest-asyncio==0.24.0
-httpx==0.27.0
-ruff>=0.9.0
+# 浏览器自动化（反检测 fork，替代 playwright + 手写 stealth JS；
+# 装完记得：python3 -m patchright install chromium；国内网络失败时
+# 可复用预装 playwright chromium，core/browser.py 会自动探测）
+patchright>=1.60

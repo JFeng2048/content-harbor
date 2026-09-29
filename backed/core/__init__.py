@@ -1,15 +1,14 @@
 """核心基础设施包
 
-分层约定：
 - database / cache / queue：运行时基础设施（lifespan 初始化）
 - security：密码 / JWT 薄封装（实现在 utils）
-- permissions：业务认证与授权 Depends（SsoUser）
-- 服务工厂：``service.dependencies``（勿再放 core）
+- permissions：认证依赖（见 core.permissions）
+- 服务工厂：定义在 ``service`` 包（见 service/__init__.py）
 
 推荐显式导入，例如::
 
     from core.database import get_async_session
-    from core.permissions import get_current_active_user, require_admin
+    from core.permissions import get_current_active_user
 """
 
 from .database import (
@@ -42,15 +41,7 @@ from .security import (
     verify_password,
     create_access_token,
 )
-from .permissions import (
-    get_current_user,
-    get_current_sso_user,
-    get_current_active_user,
-    require_admin,
-    require_teacher,
-    require_student,
-    PermissionChecker,
-)
+from .permissions import get_current_active_user
 
 __all__ = [
     "Base",
@@ -75,11 +66,5 @@ __all__ = [
     "get_password_hash",
     "verify_password",
     "create_access_token",
-    "get_current_user",
-    "get_current_sso_user",
     "get_current_active_user",
-    "require_admin",
-    "require_teacher",
-    "require_student",
-    "PermissionChecker",
 ]

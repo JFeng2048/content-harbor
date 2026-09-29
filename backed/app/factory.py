@@ -13,6 +13,7 @@ from .middleware import setup_middleware
 from .exceptions import setup_exception_handlers
 from .routes import setup_routes
 from api import register_routers
+from api.hub import register_hub
 from core.database import create_database_pool, close_database_pool, init_models
 from core.cache import init_cache, close_cache
 from core.queue import start_queue, stop_queue
@@ -60,4 +61,7 @@ def create_app() -> FastAPI:
     setup_exception_handlers(app)
     setup_routes(app)
     register_routers(app)
+    # 深度合并：把平台发布 REST API（server/api.py）挂进主后端，
+    # 由本应用统一对外服务（主后端自带 /health，故此处不重复注册）。
+    register_hub(app, include_health=False)
     return app

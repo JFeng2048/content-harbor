@@ -1,0 +1,15 @@
+{"ts": 1790610134.003187, "event": "api.access", "level": "info", "pid": 43188, "method": "GET", "path": "/status", "status": 200, "duration": 0.047, "client_ip": "testclient"}
+{"ts": 1790610134.0076032, "event": "api.access", "level": "info", "pid": 43188, "method": "GET", "path": "/platforms", "status": 200, "duration": 0.001, "client_ip": "testclient"}
+{"ts": 1790610134.0111237, "event": "api.access", "level": "info", "pid": 43188, "method": "GET", "path": "/platforms", "status": 200, "duration": 0.001, "client_ip": "testclient"}
+{"ts": 1790610134.0151243, "event": "api.access", "level": "info", "pid": 43188, "method": "GET", "path": "/articles", "status": 200, "duration": 0.001, "client_ip": "testclient"}
+{"ts": 1790610176.0604806, "event": "api.access", "level": "info", "pid": 24064, "method": "GET", "path": "/status", "status": 200, "duration": 0.055, "client_ip": "testclient"}
+{"ts": 1790610176.0654805, "event": "api.access", "level": "info", "pid": 24064, "method": "GET", "path": "/platforms", "status": 200, "duration": 0.001, "client_ip": "testclient"}
+{"ts": 1790610176.0714943, "event": "api.access", "level": "info", "pid": 24064, "method": "GET", "path": "/ai/gate", "status": 200, "duration": 0.002, "client_ip": "testclient"}
+{"ts": 1790610176.075496, "event": "api.access", "level": "info", "pid": 24064, "method": "GET", "path": "/ai/gate", "status": 200, "duration": 0.001, "client_ip": "testclient"}
+{"ts": 1790610176.0825193, "event": "api.access", "level": "info", "pid": 24064, "method": "GET", "path": "/pending-human", "status": 200, "duration": 0.001, "client_ip": "testclient"}
+{"ts": 1790610176.1301155, "event": "api.access", "level": "info", "pid": 24064, "method": "GET", "path": "/", "status": 200, "duration": 0.044, "client_ip": "testclient"}
+{"ts": 1790610406.1622329, "event": "api.access", "level": "info", "pid": 48592, "method": "GET", "path": "/status", "status": 200, "duration": 0.047, "client_ip": "testclient"}
+{"ts": 1790610406.167233, "event": "api.access", "level": "info", "pid": 48592, "method": "GET", "path": "/platforms", "status": 200, "duration": 0.002, "client_ip": "testclient"}
+{"ts": 1790610406.1742327, "event": "api.access", "level": "info", "pid": 48592, "method": "GET", "path": "/", "status": 404, "duration": 0.001, "client_ip": "testclient"}
+{"ts": 1790610438.302874, "event": "api.access", "level": "info", "pid": 25152, "method": "GET", "path": "/status", "status": 200, "duration": 0.048, "client_ip": "testclient"}
+{"ts": 1790610438.3080459, "event": "api.access", "level": "info", "pid": 25152, "method": "GET", "path": "/platforms", "status": 200, "duration": 0.001, "client_ip": "testclient"}

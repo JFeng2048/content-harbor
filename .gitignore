@@ -1,40 +1,22 @@
-# 凭据与运行时数据（config.json 里全是密钥，绝不进库）
-config.json
-.env
-data/
-*.auth.json
-
-# Python
+# 依赖与虚拟环境
+.venv/
 __pycache__/
 *.pyc
 *.pyo
-.venv/
-venv/
-*.egg-info/
 
-# 前端
-web/node_modules/
-web/dist/
+# 运行时数据
+backed/data/
+backed/logs/
+*.db
+*.sqlite3
+
+# 环境与密钥
+.env
+.env.*
+!.env.example
 
 # 编辑器 / 系统
 .idea/
 .vscode/
 .DS_Store
-Thumbs.db
-
-# 打包产物
-dist/
-build/
-*.tar.gz
-*.zip
-
-# 测试运行产物
-tests/shots/
-tests/__pycache__/
-.aqg/
-
-# 临时调试探针脚本（开发期一次性，不对外展示）
-scripts/debug/
-
-# 内部开发检查点日志
-checkpoint-*.md
+.codebuddy/

@@ -22,9 +22,15 @@ dependencies = [
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "python-multipart>=0.0.6",
+    "click>=8.1.0",
     "PyJWT>=2.8.0",
     "passlib[bcrypt]>=1.7.4",
     "python-dotenv>=1.0.0",
+    # 平台发布引擎依赖
+    "patchright>=1.60",
+    "requests>=2.31",
+    "markdown>=3.5",
+    "mcp>=1.0,<2",
 ]
 
 [dependency-groups]

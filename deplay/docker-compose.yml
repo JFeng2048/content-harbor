@@ -1,0 +1,106 @@
+# AI 内容中台 —— 生产部署编排
+#
+# 用法：
+#   cd deplay
+#   cp .env.example .env        # 按需修改密码 / 密钥
+#   docker compose up -d --build
+#
+# 访问：
+#   http://localhost:8000/docs         后端 API 文档
+#   http://localhost:3000              前端（需启用 web 服务）
+#
+# 仅启动后端 + 依赖（不含前端）：
+#   docker compose up -d --build backend mysql redis
+#
+# 启用前端（多阶段构建 + nginx 反代 /api -> backend）：
+#   docker compose --profile web up -d --build
+
+name: ai-content-hub
+
+networks:
+  app-net:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  redis_data:
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: ach-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-content_hub}
+      MYSQL_USER: ${MYSQL_USER:-ach}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ach_password}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks: [app-net]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  redis:
+    image: redis:7-alpine
+    container_name: ach-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PUBLISH_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks: [app-net]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deplay/Dockerfile
+    container_name: ach-backend
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      FASTAPI_ENV: ${FASTAPI_ENV:-docker}
+      DEBUG: ${DEBUG:-false}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-docker-min-32-chars-please}
+      DATABASE_URL: mysql+aiomysql://${MYSQL_USER:-ach}:${MYSQL_PASSWORD:-ach_password}@mysql:3306/${MYSQL_DATABASE:-content_hub}?charset=utf8mb4
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CACHE_ENABLED: "true"
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [app-net]
+
+  web:
+    profiles: ["web"]
+    build:
+      context: ../web
+      dockerfile: ../deplay/Dockerfile.web
+    container_name: ach-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    depends_on:
+      - backend
+    networks: [app-net]

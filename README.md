@@ -1,7 +1,5 @@
 # 一稿 YiGao · AI 内容中台
 
-> [English](README.en.md) · 中文
-
 > **一稿写，全网发。** 文章存在你自己的库里，AI 通过 API / MCP 全权管理：写、改、发、更新、看账号全部内容。
 > 自带内置浏览器，扫码登录一次就长期在线，不依赖你日常的 Chrome / Edge 开着。
 
@@ -24,6 +22,10 @@
   </tr>
 </table>
 
+> **重构进行中**：仓库正在把后端从旧版 `cli.py` / `core` / `server` 迁移到 `backed/`（FastAPI）。
+> 当前 `backed/` 已落地数据层与统一 REST CRUD（文章 / 发布实例 / 账号 / 任务 / 统一任务），
+> 浏览器发布适配器与旧 CLI 正在迁移。开发规范见 [`AGENT.md`](AGENT.md)。
+
 ## 30 秒看懂它能干什么
 
 - **多平台一键分发**：一篇文章，勾选平台，同时发到 **10 个平台**（掘金 / CSDN / 博客园 / 知乎 / 思否 / B站专栏 / 头条号 / 开源中国 / 51CTO / 自建博客）。
@@ -33,22 +35,24 @@
 - **免扫码通道**：博客园 / 51CTO / 自建博客走 MetaWeblog 协议，账号密码直发，一次配置长期免登录。
 - **自带 Web 管理界面**：明亮清爽的「晴空」主题，响应式适配桌面 / 平板 / 手机。
 
-## 快速开始
+## 快速开始（后端 · FastAPI）
+
+后端位于 `backed/`，基于 FastAPI，默认 SQLite、零外部依赖即可启动；生产可切 MySQL / PostgreSQL。
 
 ```bash
-git clone https://gitcode.com/badhope/ai-content-hub.git
-cd ai-content-hub
-pip install -r requirements.txt
-python3 -m patchright install chromium   # 反检测浏览器；国内网络失败时自动复用预装 playwright chromium
-
-cp config.example.json config.json      # 填 AI key（可选，不填不影响发布功能）
-
-# 扫码登录（有桌面的机器上跑一次，登录态长期有效）
-python cli.py --headed login --platform juejin
-
-# 起服务，打开 http://127.0.0.1:8800
-python cli.py serve
+# 本地启动（仅依赖 uv，跨平台）
+./start.sh          # Linux / macOS
+start.bat           # Windows cmd
+start.ps1           # PowerShell
+# 或手动：
+cd backed && uv sync && uv run uvicorn start:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+- API 文档：http://localhost:8000/docs
+- 部署：见 `deplay/`（docker-compose + Dockerfile）
+
+> 旧版的 CLI / 浏览器发布适配器（`cli.py`、`core/adapters`、`server/`）正在迁移到新的 FastAPI
+> 服务之上，数据层（文章 / 发布实例 / 账号 / 任务 / 统一任务）已先行落地，详见 `AGENT.md`。
 
 ## 支持平台（10 个）
 
@@ -244,32 +248,24 @@ ai_polish         AI 润色：修错别字、统一代码块语言、理顺结�
 
 然后直接说人话：「写篇讲 XX 的文章发到掘金和 CSDN」「把 3 号文章标题改了同步到全部平台」「看看我账号里有哪些文章」。
 
-### 方式 B：REST API
+### 方式 B：REST API（新版 FastAPI 服务）
 
-```bash
-python cli.py serve        # http://127.0.0.1:8800/docs
-```
+新后端（`backed/`）提供统一 REST CRUD，所有接口挂在 `/api/v1` 下，统一响应信封
+（`SuccessResponse` / `PaginationResponse`），详见 `AGENT.md`。
 
-| 方法 | 路径 | 作用 |
+| 资源 | 路径前缀 | 说明 |
 |---|---|---|
-| GET | `/status` | 总览 |
-| GET/POST | `/articles` | 列表 / 新建 |
-| GET/PUT | `/articles/{id}` | 读 / 改 |
-| POST | `/articles/{id}/publish` | 发布 |
-| POST | `/articles/{id}/update` | **原地更新** |
-| POST | `/sync/pending` | 推平所有改动 |
-| POST | `/refresh/{platform}` | 抓账号文章入库 |
-| POST | `/ai/write` | **AI 写一篇并入库** |
-| POST | `/articles/{id}/ai-rewrite` | AI 改写 |
-| POST | `/articles/{id}/ai-polish` | AI 润色 |
-| GET | `/ai/status` | AI 配置好了没 |
-| GET | `/accounts`、`/jobs` | 账号、任务流水 |
-| POST | `/accounts/{platform}/login` | 扫码/过验证登录（`on_captcha=handoff\|abort`） |
-| POST | `/accounts/{platform}/solve-captcha` | 就地处理验证码（半自动+人工） |
-| GET | `/accounts/{platform}/diagnose` | 这平台怎么接、验证码怎么过 |
-| GET | `/platforms` | 已实现的平台列表 |
+| 文章 | `/api/v1/article` | 文章库（AI 写/改都在这儿） |
+| 发布实例 | `/api/v1/publication` | 文章×平台，存 post_id / edit_url |
+| 平台账号 | `/api/v1/account` | 各平台登录态与账号信息 |
+| 任务流水 | `/api/v1/job` | 发布/抓取任务流水 |
+| 统一任务 | `/api/v1/task` | 统一内容任务 |
 
-> API 文档：`http://127.0.0.1:8800/docs`（FastAPI 自动生成，能直接点着调）
+每个资源提供：`GET /`（列表分页）、`POST /`（创建）、`GET /{id}`（详情）、
+`PUT /{id}`（更新）、`DELETE /{id}`（删除）、`PATCH /{id}/status`（状态变更）。
+交互式文档：http://localhost:8000/docs
+
+> 旧版 `server/api.py` 的发布 / AI 业务接口正在迁移，请以新版 `/api/v1` 与各资源 `Resource` 为准。
 
 ---
 
@@ -532,53 +528,34 @@ dump_dom(page, "csdn_list")     # HTML 存到 data/debug/
 
 ```
 ai-content-hub/
-├─ cli.py                  命令行入口（16 个命令）
-├─ config.example.json     凭据模板（复制为 config.json）
-├─ core/
-│  ├─ db.py                数据层（SQLite）
-│  ├─ browser.py           内置浏览器 + 登录态持久化 + 反检测 + 验证码策略
-│  ├─ humanize.py          拟人化操作（变速输入、弧线鼠标、滑块拖动）
-│  ├─ ai.py                AI 写稿（OpenAI 兼容协议）
-│  ├─ service.py           业务层（AI 调的就是这个）
-│  └─ adapters/
-│     ├─ base.py           适配器接口 + 通用工具（HTML 粘贴/表单/cookie 工具）
-│     ├─ juejin.py         掘金（浏览器 + 内容 API）
-│     ├─ csdn.py           CSDN（浏览器）
-│     ├─ cnblogs.py        博客园（免浏览器，MetaWeblog）
-│     ├─ wuyi_cto.py       51CTO（免浏览器，MetaWeblog 账密直发）
-│     ├─ zhihu.py          知乎专栏（Draft.js 编辑器注入）
-│     ├─ segmentfault.py   思否（草稿 API + token 头）
-│     ├─ bilibili.py       B站专栏（FormData + bili_jct）
-│     ├─ toutiao.py        头条号（contenteditable 注入）
-│     └─ oschina.py        开源中国（UEditor iframe）
-├─ server/
-│  ├─ static/              Web 界面构建产物（Vue 打包后落这儿）
-│  ├─ api.py               REST API（25 个端点）
-│  └─ mcp_server.py        MCP Server（AI 直连，13 个工具）
-├─ web/                    前端工程（Vue3 + Element Plus + Vite）
-│  ├─ src/
-│  │  ├─ App.vue           布局骨架 + 响应式抽屉切换
-│  │  ├─ api.js            接口封装
-│  │  ├─ stores/hub.js     Pinia 状态
-│  │  ├─ composables/      断点检测
-│  │  ├─ components/       头部 / 列表 / 编辑器 / 发布面板 / AI 弹窗
-│  │  └─ styles/main.scss  主题与响应式
-│  ├─ vite.config.js       产物落到 ../server/static
-│  └─ package.json
-├─ tests/                  E2E 测试套件（mock 平台 + 截图流程，见 tests/README.md）
-├─ docs/screenshots/       README 配图
-└─ data/                   数据库 + 浏览器 profile + 验证码现场 + 调试 HTML
+├─ backed/                # 后端（FastAPI）：数据层 / REST CRUD / 配置 / 基础设施
+│  ├─ start.py            # 入口：uvicorn start:app
+│  ├─ app/                # 应用装配（factory / config / middleware / routes）
+│  ├─ api/v1/             # Resource 层（路由 + 校验 + 调 Service）
+│  ├─ service/            # 业务逻辑层（DI 工厂在 __init__.py）
+│  ├─ repository/         # 数据访问层
+│  ├─ models/ schemas/    # ORM 模型 / Pydantic 模型
+│  ├─ config/ core/       # 多环境配置 / 数据库·缓存·队列·权限
+│  ├─ middleware/ utils/  # 限流 / 审计 / 日志 / 异常
+│  └─ tests/              # 单元 + 集成测试
+├─ deplay/                # 部署编排（docker-compose / Dockerfile / 运维配置）
+├─ docs/                  # 产品 / 架构文档
+├─ web/                   # 前端（Vue3 + Vite，独立工程）
+├─ start.sh / .bat / .ps1 # 本地启动脚本（仅依赖 uv）
+├─ AGENT.md               # 面向 AI 助手的项目说明
+└─ README.md              # 本文件
 ```
 
-> `data/profiles/` 存的是登录态，`data/captcha/` 存的是验证码现场截图，
-> **都别外传，别进 git**（`.gitignore` 已排除 `data/` 和 `config.json`）。
+> 开发指南（分层、约定、如何新增表、部署）见 `AGENT.md`。
+> 旧版 `cli.py` / `core/adapters` / `server/` 的浏览器发布能力正在迁移到新的
+> FastAPI 服务之上，数据层已先行落地。
 
 ---
 
 ## 十五、参与贡献
 
-欢迎 Issue / PR。改平台适配器前先跑一下 `python cli.py diagnose --platform xxx`，
-选择器失效时用 `dump_dom()` 存现场比猜快十倍。
+欢迎 Issue / PR。后端改动请先 `cd backed && uv run pytest`；
+新增资源表见 `AGENT.md` 的「新增业务表」一节。
 
 ## 十六、AI 使用说明（透明度声明）
 
