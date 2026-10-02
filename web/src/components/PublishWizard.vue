@@ -140,7 +140,7 @@ const progressPct = computed(() => results.value.length
   : running.value ? 15 : 0)
 
 // 分类是长期偏好（记住，下次自动带出）；标签跟具体文章走（不跨文章复用）
-const CAT_MEM_KEY = 'yigao.publish.categories'
+const CAT_MEM_KEY = 'harbor.publish.categories'
 function loadCatMem() {
   try { return JSON.parse(localStorage.getItem(CAT_MEM_KEY) || '{}') } catch { return {} }
 }

@@ -6,6 +6,7 @@
 
 patch 必须发生在 server.api 导入之前。用法：python tests/run_patched_server_zhihu.py
 """
+
 import sys
 from pathlib import Path
 
@@ -19,7 +20,8 @@ from service.publishing.adapters.zhihu import ZhihuAdapter  # noqa: E402
 ZhihuAdapter.login_url = BASE + "/signin"
 ZhihuAdapter.home_url = BASE + "/write"
 ZhihuAdapter.new_url = BASE + "/write"
-ZhihuAdapter.DOMAIN = "127.0.0.1:9103"   # check_auth 的「是否已在平台域」判定
+ZhihuAdapter.me_api = BASE + "/api/v4/me"
+ZhihuAdapter.DOMAIN = "127.0.0.1:9103"  # check_auth 的「是否已在平台域」判定
 
 print(f"[patched] zhihu 适配器 -> {BASE}", flush=True)
 

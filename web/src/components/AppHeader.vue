@@ -76,6 +76,7 @@ function onMore(cmd) {
     border: 0; background: transparent; color: var(--tx-3);
     font-size: var(--fs-sm); padding: 4px 14px; border-radius: 6px;
     cursor: pointer; position: relative;
+    white-space: nowrap;
     display: inline-flex; align-items: center; gap: 5px;
     &:hover { color: var(--tx-1); }
     &.on {
@@ -116,8 +117,10 @@ function onMore(cmd) {
 }
 
 // 窄屏：AI 状态只留圆点，把宽度让给「更多/新建」，避免按钮堆叠挤压
-@media (max-width: 560px) {
+@media (max-width: 767px) {
   .ai-state .txt { display: none; }
   .ai-state { padding: 0 2px; }
+  .hdr-sep { display: none; }
+  .view-switch .vs-btn { padding: 4px 10px; }
 }
 </style>

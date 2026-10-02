@@ -10,6 +10,7 @@ export const useHubStore = defineStore('hub', {
   state: () => ({
     articles: [],
     currentId: null,
+    _openGen: 0,       // 切换文章的代际号：晚返回的旧请求直接丢弃（防连点竞态）
     current: null,
     publications: [],
     allPubs: [],        // 全部发布实例（管理视图用，带文章标题）
@@ -176,19 +177,27 @@ export const useHubStore = defineStore('hub', {
           )
         } catch { return }   // 用户取消，留在当前文章
       }
+      const gen = ++this._openGen
+      // 先取文成功再切换：请求失败（404/断网）时 current/currentId 保持原文章，
+      // 不再出现 id 已切走、正文还是旧文的错位（审查 C4）
+      let article
+      try { article = await api.getArticle(id) } catch { return }
+      if (!article || gen !== this._openGen) return   // 期间又发起了更新的切换，丢弃本次
       this.currentId = id
-      this.current = await api.getArticle(id)
+      this.current = article
       await this.loadPubs()
-      this.dirty = false
+      if (gen === this._openGen) this.dirty = false
     },
 
     async loadPubs() {
-      this.publications = this.currentId
-        ? (await api.publications(this.currentId) || [])
-        : []
+      const id = this.currentId
+      const pubs = id ? (await api.publications(id) || []) : []
+      if (id !== this.currentId) return   // 加载期间又切换了文章，丢弃过期发布列表
+      this.publications = pubs
     },
 
     newArticle() {
+      this._openGen++          // 作废所有在途的文章切换请求
       this.currentId = null
       this.current = {
         title: '未命名文章',

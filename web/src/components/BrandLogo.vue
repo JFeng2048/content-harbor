@@ -1,7 +1,7 @@
 <template>
   <span class="brand" :class="{ big: size === 'big' }">
     <svg class="brand-mark" :style="{ width: px + 'px', height: px + 'px' }" viewBox="0 0 48 48" aria-hidden="true">
-      <!-- 一稿 mark：圆角方底 + 金色"一"字笔触 + 散落墨点（多平台分发） -->
+      <!-- 内容港 mark：圆角方底 + 金色"一"字笔触 + 散落墨点（多平台分发） -->
       <rect x="3" y="3" width="42" height="42" rx="12" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="1" />
       <!-- "一"：横笔，古铜金，微倾斜，像落笔 -->
       <rect x="13" y="21" width="22" height="4.5" rx="2.25"
@@ -20,8 +20,8 @@
 
 <script setup>
 defineProps({
-  name: { type: String, default: '一稿' },
-  sub: { type: String, default: '一稿写 · 全网发' },
+  name: { type: String, default: '内容港 Harbor' },
+  sub: { type: String, default: '内容进港 · 全网分发' },
   px: { type: Number, default: 28 },
   withName: { type: Boolean, default: true },
   size: { type: String, default: '' }
@@ -42,6 +42,7 @@ defineProps({
   font-weight: 600;
   letter-spacing: .04em;
   line-height: 1;
+  white-space: nowrap;
   color: var(--tx-1);
 }
 .brand-sub {
@@ -52,5 +53,10 @@ defineProps({
   margin-top: 4px;
   line-height: 1;
   white-space: nowrap;
+}
+
+/* 手机：品牌文字让位给导航与主操作，只留图形标 */
+@media (max-width: 767px) {
+  .brand-txt { display: none; }
 }
 </style>

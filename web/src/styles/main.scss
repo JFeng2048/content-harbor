@@ -128,13 +128,33 @@ html, body, #app {
 body {
   background: var(--bg);
   font-family: var(--font-sans);
-  font-size: var(--fs-md);
+  font-size: 14px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   color: var(--tx-1);
 }
 
 ::selection { background: rgba(51, 112, 255, .16); color: var(--tx-1); }
+
+// 键盘焦点可见（a11y）：只描边可交互控件，输入框已有自身聚焦环不重复
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+// 系统开启"减少动态效果"时关闭入场/脉冲动效（a11y）
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
 
 // ---------- 通用动效（克制、轻快） ----------
 @keyframes fadeUp {
@@ -527,6 +547,8 @@ body {
   flex-shrink: 0;
   position: relative;
   z-index: 10;
+  // 布局兜底：任何未来的内容膨胀都不得把顶栏撑出视口（弹层是 teleport，不受影响）
+  overflow: hidden;
 
   .spacer { flex: 1; }
 
@@ -598,6 +620,9 @@ body {
     .btxt { display: none; }
     .el-button { padding: 8px 10px; }
   }
+
+  // 预览区在小屏收窄内边距，把版心还给正文
+  .md-preview { padding: 20px 16px; }
 }
 
 // ---------- Element Plus 组件精修（干净、圆润） ----------

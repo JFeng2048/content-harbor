@@ -4,14 +4,17 @@
 用法：python tests/mocks/mock_openai.py &
 然后把 config.json 的 openai_base_url 指到 http://127.0.0.1:9101/v1 即可。
 """
-from flask import Flask, request, jsonify
 
-app = Flask(__name__)
+import uvicorn
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
+app = FastAPI()
 
 
 @app.post("/v1/chat/completions")
-def completions():
-    body = request.get_json(force=True) or {}
+async def completions(request: Request):
+    body = await request.json()
     user = ""
     for m in body.get("messages", []):
         if m.get("role") == "user":
@@ -24,17 +27,28 @@ def completions():
     elif "改写" in user:
         content = "## 改写后\n\n这是按指令改写后的内容，结构更口语。"
     else:
-        content = ("标题：Mock 标题-反爬策略实践\n\n"
-                   "## 问题\n\n自动化发布常被风控拦截。\n\n"
-                   "## 方案\n\n```python\npage.add_init_script(stealth_js)\n```\n\n"
-                   "## 踩坑\n\n无头 UA 与指纹不一致会被识别。\n\n## 结论\n\n反检测+登录态持久化。")
-    return jsonify({
-        "id": "mock-1", "object": "chat.completion", "model": body.get("model", "mock"),
-        "choices": [{"index": 0, "finish_reason": "stop",
-                     "message": {"role": "assistant", "content": content}}],
-        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
-    })
+        content = (
+            "标题：Mock 标题-反爬策略实践\n\n"
+            "## 问题\n\n自动化发布常被风控拦截。\n\n"
+            "## 方案\n\n```python\npage.add_init_script(stealth_js)\n```\n\n"
+            "## 踩坑\n\n无头 UA 与指纹不一致会被识别。\n\n## 结论\n\n反检测+登录态持久化。"
+        )
+    return JSONResponse(
+        {
+            "id": "mock-1",
+            "object": "chat.completion",
+            "model": body.get("model", "mock"),
+            "choices": [
+                {
+                    "index": 0,
+                    "finish_reason": "stop",
+                    "message": {"role": "assistant", "content": content},
+                }
+            ],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+        }
+    )
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=9101, threaded=True)
+    uvicorn.run(app, host="127.0.0.1", port=9101, log_level="warning")
