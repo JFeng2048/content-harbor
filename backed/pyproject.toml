@@ -1,0 +1,53 @@
+# 由 SQL-to-FastAPI-Scaffold 生成。
+# 包管理与启动推荐使用 uv（https://github.com/astral-sh/uv）
+#
+# 占位符（生成时替换）：
+#   {{project_name}}         — 项目名（PEP 503：建议用连字符，如 fastapi_project_starter）
+#   {{project_description}}  — 项目描述
+
+[project]
+name = "ai-content-hub-backend"
+version = "0.1.0"
+description = "AI 内容中台后端：基于 FastAPI 的文章库 / 发布实例 / 任务引擎（sql-to-fastapi-restfulapi-scaffold 生成）"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.23.0",
+    "sqlalchemy>=2.0.0",
+    "aiosqlite>=0.20.0",
+    "aiomysql>=0.2.0",
+    "pymysql>=1.1.0",
+    "greenlet>=3.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "python-multipart>=0.0.6",
+    "click>=8.1.0",
+    "PyJWT>=2.8.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-dotenv>=1.0.0",
+    # 平台发布引擎依赖
+    "patchright>=1.60",
+    "requests>=2.31",
+    "markdown>=3.5",
+    "mcp>=1.0,<2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+    "aiosqlite>=0.20.0",
+]
+
+[tool.uv]
+# 应用型脚手架（非可发布库）：不打包安装项目本身，用 uv run 在环境中执行
+package = false
+# 默认同步时安装 dev 依赖组，便于测试
+default-groups = ["dev"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]

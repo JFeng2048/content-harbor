@@ -20,20 +20,33 @@
 
 ## Quick Start
 
+The backend now lives in `backed/` (FastAPI; SQLite by default, MySQL/PostgreSQL in production).
+
 ```bash
 git clone https://gitcode.com/badhope/content-harbor.git
 cd content-harbor
-pip install -r requirements.txt
-python3 -m patchright install chromium
 
-cp config.example.json config.json
-
-# Scan QR once (on a machine with a display)
-python cli.py --headed login --platform juejin
-
-# Start the web UI at http://127.0.0.1:8800
-python cli.py serve
+# Start the backend (only requires uv)
+./start.sh          # Linux / macOS
+start.bat           # Windows
+# or manually:
+cd backed && uv sync && uv run uvicorn start:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+- API docs: http://localhost:8000/docs
+- Deployment: see `deplay/` (docker-compose + Dockerfile)
+
+CLI (run from inside `backed/`):
+
+```bash
+cd backed
+uv run python cli.py --headed login --platform juejin   # scan QR once
+uv run python cli.py status
+uv run python cli.py serve                              # REST server on http://127.0.0.1:8800
+```
+
+Web UI: build the frontend once (`cd web && pnpm install && pnpm build`; output goes to
+`server/static/`), then the backend serves it at the root URL. Chinese docs: [README.md](README.md).
 
 ## Supported Platforms (10)
 

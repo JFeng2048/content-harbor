@@ -1,0 +1,92 @@
+"""应用工厂：lifespan + 中间件 + 异常 + 路由。"""
+
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import AsyncGenerator
+
+from fastapi import FastAPI
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from config import settings
+from utils.logger import setup_logging, get_logger
+from .config import AppConfig
+from .middleware import setup_middleware
+from .exceptions import setup_exception_handlers
+from .routes import setup_routes
+from api import register_routers
+from api.hub import register_hub
+from core.database import create_database_pool, close_database_pool, init_models
+from core.cache import init_cache, close_cache
+from core.queue import start_queue, stop_queue
+
+logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """日志 → DB → 缓存 → 队列。HTTPS/TLS 由反向代理负责，此处不强制跳转。"""
+    logger.info("正在启动应用...")
+    try:
+        setup_logging(level=getattr(settings, "log_level", "INFO"))
+        await create_database_pool()
+        await init_models()
+        await init_cache()
+        await start_queue()
+        logger.info("应用启动成功 - 环境: %s", settings.environment)
+        yield
+    except Exception as e:
+        logger.error("应用启动失败: %s", e)
+        raise
+    finally:
+        logger.info("正在关闭应用资源...")
+        try:
+            await stop_queue()
+            await close_cache()
+            await close_database_pool()
+            logger.info("应用已安全关闭")
+        except Exception as e:
+            logger.error("关闭资源时出错: %s", e)
+
+
+def _mount_web_ui(app: FastAPI) -> None:
+    """挂载 Vue 管理界面（`web/` 构建产物落在 `server/static/`）。
+
+    构建方式：``cd web && pnpm build``。产物不存在时跳过，后端仍照常提供
+    REST API；``/`` 返回 ``index.html``，静态资源挂在 ``/static`` 下
+    （与 vite 的 ``base: '/static/'`` 约定一致）。
+    """
+    static_dir = Path(__file__).resolve().parents[2] / "server" / "static"
+    if not static_dir.is_dir():
+        return
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    index_file = static_dir / "index.html"
+    if index_file.is_file():
+
+        @app.get("/", include_in_schema=False)
+        def index() -> FileResponse:
+            """Web 管理界面入口：浏览器打开根路径即是这个。"""
+            return FileResponse(str(index_file))
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(**AppConfig.get_app_config(), lifespan=lifespan)
+
+    # 非 debug 时限制 Host（Docker/本地可在 .env 配置 ALLOWED_HOSTS）
+    if not settings.debug:
+        app.add_middleware(
+            TrustedHostMiddleware,
+            allowed_hosts=getattr(settings, "allowed_hosts", ["*"]),
+        )
+
+    setup_middleware(app)
+    setup_exception_handlers(app)
+    setup_routes(app)
+    register_routers(app)
+    # 深度合并：把平台发布 REST API（api/hub.py）挂进主后端，
+    # 由本应用统一对外服务（主后端自带 /health，故此处不重复注册）。
+    register_hub(app, include_health=False)
+    # Web 管理界面（构建产物存在则挂载）
+    _mount_web_ui(app)
+    return app

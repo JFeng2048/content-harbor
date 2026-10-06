@@ -24,6 +24,10 @@
   </tr>
 </table>
 
+> **后端重构已完成**：后端已从旧版 `cli.py` / `core` / `server` 迁移到 `backed/`（FastAPI 分层架构），
+> 原 REST 端点（发布 / 原地更新 / 同步 / AI / 账号）全部保留，并新增统一 CRUD 资源接口（`/api/v1`）。
+> 开发规范见 [`AGENT.md`](AGENT.md)，架构说明见 [`ARCHITECTURE.md`](ARCHITECTURE.md)。
+
 ## 30 秒看懂它能干什么
 
 - **多平台一键分发**：一篇文章，勾选平台，同时发到 **10 个平台**（掘金 / CSDN / 博客园 / 知乎 / 思否 / B站专栏 / 头条号 / 开源中国 / 51CTO / 自建博客）。
@@ -33,22 +37,34 @@
 - **免扫码通道**：博客园 / 51CTO / 自建博客走 MetaWeblog 协议，账号密码直发，一次配置长期免登录。
 - **自带 Web 管理界面**：明亮清爽的「晴空」主题，响应式适配桌面 / 平板 / 手机。
 
-## 快速开始
+## 快速开始（后端 · FastAPI）
+
+后端位于 `backed/`，基于 FastAPI，默认 SQLite、零外部依赖即可启动；生产可切 MySQL / PostgreSQL。
 
 ```bash
-git clone https://gitcode.com/badhope/content-harbor.git
-cd content-harbor
-pip install -r requirements.txt
-python3 -m patchright install chromium   # 反检测浏览器；国内网络失败时自动复用预装 playwright chromium
-
-cp config.example.json config.json      # 填 AI key（可选，不填不影响发布功能）
-
-# 扫码登录（有桌面的机器上跑一次，登录态长期有效）
-python cli.py --headed login --platform juejin
-
-# 起服务，打开 http://127.0.0.1:8800
-python cli.py serve
+# 本地启动（仅依赖 uv，跨平台）
+./start.sh          # Linux / macOS
+start.bat           # Windows cmd
+start.ps1           # PowerShell
+# 或手动：
+cd backed && uv sync && uv run uvicorn start:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+- API 文档：http://localhost:8000/docs
+- 部署：见 `deplay/`（docker-compose + Dockerfile）
+
+### CLI 常用命令（在 `backed/` 目录下运行）
+
+```bash
+cd backed
+uv run python cli.py --headed login --platform juejin   # 扫码登录一次，登录态长期有效
+uv run python cli.py status                             # 中台总览
+uv run python cli.py publish --id 1 --platforms juejin,csdn   # 发布（--draft 只发草稿箱）
+uv run python cli.py serve                              # 起 REST 服务（默认 http://127.0.0.1:8800）
+```
+
+> 旧版顶层 `cli.py` / `core/` / `server/` 已迁移：CLI 见 `backed/cli.py`，发布引擎见
+> `backed/service/publishing/`，REST 端点（含发布 / 原地更新 / 同步 / AI / 账号）见 `backed/api/hub.py`。
 
 ## 支持平台（10 个）
 
@@ -66,7 +82,7 @@ python cli.py serve
 | 开源中国 | 浏览器 UI 注入 | ✅ | — | — | UEditor 富文本 |
 
 > 知乎 / 头条 / 开源中国的发布选择器参考社区实测（MultiPost-Extension 等），平台改版后跑
-> `python cli.py dump-dom --platform xxx` 重抓结构即可。扩一个新平台照着任一适配器抄 150 行。
+> `uv run python cli.py --headed diagnose --platform xxx` 看现场、重抓结构即可。扩一个新平台照着任一适配器抄 150 行。
 
 ## 这是什么 / 不是什么
 
@@ -87,7 +103,7 @@ python cli.py serve
 | 做成独立程序 | 做不到，必须寄生 | 天然独立，能打包分发 |
 
 代价：平台适配要自己写。目前 10 个平台已实现（见上方平台矩阵），
-扩平台照着 150 行抄一个即可。文章可以由 AI 直接写（`core/ai.py`），接任何 OpenAI 兼容模型（DeepSeek / 豆包 / 通义 / Kimi / 智谱 / Ollama）。
+扩平台照着 150 行抄一个即可。文章可以由 AI 直接写（`backed/service/publishing/ai.py`），接任何 OpenAI 兼容模型（DeepSeek / 豆包 / 通义 / Kimi / 智谱 / Ollama）。
 
 ---
 
@@ -118,6 +134,9 @@ python cli.py serve
 
 ## 三、命令行用法
 
+> CLI 入口在 `backed/cli.py`；以下命令请在 `backed/` 目录下执行
+> （推荐 `uv run python cli.py ...`，也可在已装好依赖的环境里 `python cli.py ...`）。
+
 ```bash
 # 1) 扫码登录（会弹出浏览器窗口，扫一次就存住了）
 python cli.py login --platform juejin
@@ -127,7 +146,7 @@ python cli.py login --platform csdn
 python cli.py check --platform juejin
 
 # 3) 导入一篇文章
-python cli.py import --path ./my-post.md
+python cli.py import-md --path ./my-post.md
 
 # 4) 发布
 python cli.py publish --id 1 --platforms juejin,csdn
@@ -144,7 +163,9 @@ python cli.py status
 
 ## 四、Web 管理界面
 
-启动服务后浏览器打开 `http://127.0.0.1:8800`。左边文章列表，中间编辑区，右边发布面板。
+先把前端构建一次（`cd web && pnpm install && pnpm build`，产物落在 `server/static/`），
+再启动后端，浏览器打开 `http://127.0.0.1:8000`（`cli.py serve` 默认 `http://127.0.0.1:8800`）。
+左边文章列表，中间编辑区，右边发布面板。
 
 界面走「**晴空**」主题——明亮现代 SaaS 风：浅灰底 + 纯白卡片 + 飞书蓝主色，
 圆角适中、无衬线字体、全链路 0 外部请求（离线可用），顶栏是分组工具条
@@ -177,12 +198,12 @@ python cli.py status
 ```bash
 cd web
 pnpm install
-pnpm dev        # 开发模式，:5173，自动代理 /api 到后端 :8800
-pnpm build      # 构建到 server/static/，之后 python cli.py serve 一把梭带界面
+pnpm dev        # 开发模式，:5173，自动代理 /api 到后端（默认 :8000）
+pnpm build      # 构建到 server/static/，之后启动后端即可直接使用界面
 ```
 
-改界面就改 `web/src/`，改完 `pnpm build`；不想装 Node 也行，
-`server/static/` 里是构建好的产物，直接跑后端就能用。
+改界面就改 `web/src/`，改完 `pnpm build`；构建产物不再随仓库提交，
+未构建时后端只提供 REST API / MCP，Web 界面不生效。
 
 ---
 
@@ -244,11 +265,11 @@ ai_polish         AI 润色：修错别字、统一代码块语言、理顺结�
 
 然后直接说人话：「写篇讲 XX 的文章发到掘金和 CSDN」「把 3 号文章标题改了同步到全部平台」「看看我账号里有哪些文章」。
 
-### 方式 B：REST API
+### 方式 B：REST API（FastAPI 服务）
 
-```bash
-python cli.py serve        # http://127.0.0.1:8800/docs
-```
+服务启动后（默认 `http://127.0.0.1:8000`，`cli.py serve` 默认 `http://127.0.0.1:8800`），提供两类接口。
+
+**1）业务端点**（发布引擎，路径与原版保持一致）
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
@@ -262,14 +283,25 @@ python cli.py serve        # http://127.0.0.1:8800/docs
 | POST | `/ai/write` | **AI 写一篇并入库** |
 | POST | `/articles/{id}/ai-rewrite` | AI 改写 |
 | POST | `/articles/{id}/ai-polish` | AI 润色 |
-| GET | `/ai/status` | AI 配置好了没 |
-| GET | `/accounts`、`/jobs` | 账号、任务流水 |
+| GET | `/accounts`、`/tasks` | 账号、任务流水 |
 | POST | `/accounts/{platform}/login` | 扫码/过验证登录（`on_captcha=handoff\|abort`） |
 | POST | `/accounts/{platform}/solve-captcha` | 就地处理验证码（半自动+人工） |
 | GET | `/accounts/{platform}/diagnose` | 这平台怎么接、验证码怎么过 |
 | GET | `/platforms` | 已实现的平台列表 |
 
-> API 文档：`http://127.0.0.1:8800/docs`（FastAPI 自动生成，能直接点着调）
+**2）统一 CRUD 资源**（新增，挂在 `/api/v1` 下，统一响应信封 `SuccessResponse` / `PaginationResponse`）
+
+| 资源 | 路径前缀 | 说明 |
+|---|---|---|
+| 文章 | `/api/v1/article` | 文章库（AI 写/改都在这儿） |
+| 发布实例 | `/api/v1/publication` | 文章×平台，存 post_id / edit_url |
+| 平台账号 | `/api/v1/account` | 各平台登录态与账号信息 |
+| 任务流水 | `/api/v1/job` | 发布/抓取任务流水 |
+| 统一任务 | `/api/v1/task` | 统一内容任务 |
+
+每个资源提供：`GET /`（列表分页）、`POST /`（创建）、`GET /{id}`（详情）、
+`PUT /{id}`（更新）、`DELETE /{id}`（删除）、`PATCH /{id}/status`（状态变更）。
+交互式文档：http://localhost:8000/docs
 
 ---
 
@@ -301,7 +333,7 @@ python cli.py diagnose --platform cnblogs    # 看看这平台推荐怎么接
 
 ### L2 反检测 + 登录态持久化（降低触发率）
 
-`core/browser.py` 里逐条抹平自动化痕迹：
+`backed/service/publishing/browser.py` 里逐条抹平自动化痕迹：
 
 | 指纹点 | 处理 |
 |---|---|
@@ -319,7 +351,7 @@ python cli.py diagnose --platform cnblogs    # 看看这平台推荐怎么接
 
 ### L3 半自动 + 人工交接（真弹了怎么办）
 
-`core/humanize.py` + `CaptchaPolicy`：
+`backed/service/publishing/humanize.py` + `CaptchaPolicy`：
 
 1. **先半自动试一次** —— 纯复选框那种（"确认您不是机器人"）经常能过，
    用带轨迹的鼠标去点，而不是 `locator.click()`（后者零延迟，行为特征明显）。
@@ -459,11 +491,11 @@ python tests/e2e_zhihu_screenshots.py [截图目录]
 
 实测成绩（2026-09）：掘金截图版 **16/16**（REST 1~5ms、扫码到在线 7.9s、发布 0.6s、
 刷新持久化 ✓）；知乎截图版 **9/9**（发布全流程 25.2s、post_id 落库 ✓）+ API 冒烟 **4/4**。
-原理与边界（patch 方式、mock 扫码、测不到的真实风控）见 [tests/README.md](tests/README.md)。
+原理与边界（patch 方式、mock 扫码、测不到的真实风控）见 [backed/tests_publishing/README.md](backed/tests_publishing/README.md)。
 
 ## 十二、扩展新平台（照抄 150 行）
 
-在 `core/adapters/` 新建 `xxx.py`，实现四个动作：
+在 `backed/service/publishing/adapters/` 新建 `xxx.py`，实现四个动作：
 
 ```python
 @register
@@ -480,12 +512,12 @@ class XxxAdapter(PlatformAdapter):
     def update(self, page, pub, article) -> bool: ... # 打开 edit_url 改内容保存
 ```
 
-最后在 `core/service.py` 里 `from core.adapters import xxx` 导入一下即可注册。
+最后在 `backed/service/publishing/service.py` 里 `from service.publishing.adapters import xxx` 导入一下即可注册。
 
 **校准技巧**（必看）：平台改版导致选择器失效时，别瞎猜——
 
 ```python
-from core.browser import dump_dom
+from service.publishing.browser import dump_dom
 dump_dom(page, "csdn_list")     # HTML 存到 data/debug/
 ```
 
@@ -531,54 +563,35 @@ dump_dom(page, "csdn_list")     # HTML 存到 data/debug/
 ## 十四、目录结构
 
 ```
-content-harbor/
-├─ cli.py                  命令行入口（16 个命令）
-├─ config.example.json     凭据模板（复制为 config.json）
-├─ core/
-│  ├─ db.py                数据层（SQLite）
-│  ├─ browser.py           内置浏览器 + 登录态持久化 + 反检测 + 验证码策略
-│  ├─ humanize.py          拟人化操作（变速输入、弧线鼠标、滑块拖动）
-│  ├─ ai.py                AI 写稿（OpenAI 兼容协议）
-│  ├─ service.py           业务层（AI 调的就是这个）
-│  └─ adapters/
-│     ├─ base.py           适配器接口 + 通用工具（HTML 粘贴/表单/cookie 工具）
-│     ├─ juejin.py         掘金（浏览器 + 内容 API）
-│     ├─ csdn.py           CSDN（浏览器）
-│     ├─ cnblogs.py        博客园（免浏览器，MetaWeblog）
-│     ├─ wuyi_cto.py       51CTO（免浏览器，MetaWeblog 账密直发）
-│     ├─ zhihu.py          知乎专栏（Draft.js 编辑器注入）
-│     ├─ segmentfault.py   思否（草稿 API + token 头）
-│     ├─ bilibili.py       B站专栏（FormData + bili_jct）
-│     ├─ toutiao.py        头条号（contenteditable 注入）
-│     └─ oschina.py        开源中国（UEditor iframe）
-├─ server/
-│  ├─ static/              Web 界面构建产物（Vue 打包后落这儿）
-│  ├─ api.py               REST API（25 个端点）
-│  └─ mcp_server.py        MCP Server（AI 直连，13 个工具）
-├─ web/                    前端工程（Vue3 + Element Plus + Vite）
-│  ├─ src/
-│  │  ├─ App.vue           布局骨架 + 响应式抽屉切换
-│  │  ├─ api.js            接口封装
-│  │  ├─ stores/hub.js     Pinia 状态
-│  │  ├─ composables/      断点检测
-│  │  ├─ components/       头部 / 列表 / 编辑器 / 发布面板 / AI 弹窗
-│  │  └─ styles/main.scss  主题与响应式
-│  ├─ vite.config.js       产物落到 ../server/static
-│  └─ package.json
-├─ tests/                  E2E 测试套件（mock 平台 + 截图流程，见 tests/README.md）
-├─ docs/screenshots/       README 配图
-└─ data/                   数据库 + 浏览器 profile + 验证码现场 + 调试 HTML
+ai-content-hub/
+├─ backed/                # 后端（FastAPI）：数据层 / REST CRUD / 配置 / 基础设施
+│  ├─ start.py            # 入口：uvicorn start:app
+│  ├─ app/                # 应用装配（factory / config / middleware / routes）
+│  ├─ api/v1/             # Resource 层（路由 + 校验 + 调 Service）
+│  ├─ service/            # 业务逻辑层（DI 工厂在 __init__.py）
+│  ├─ repository/         # 数据访问层
+│  ├─ models/ schemas/    # ORM 模型 / Pydantic 模型
+│  ├─ config/ core/       # 多环境配置 / 数据库·缓存·队列·权限
+│  ├─ middleware/ utils/  # 限流 / 审计 / 日志 / 异常
+│  └─ tests/              # 单元 + 集成测试
+├─ deplay/                # 部署编排（docker-compose / Dockerfile / 运维配置）
+├─ docs/                  # 产品 / 架构文档
+├─ web/                   # 前端（Vue3 + Vite，独立工程）
+├─ start.sh / .bat / .ps1 # 本地启动脚本（仅依赖 uv）
+├─ AGENT.md               # 面向 AI 助手的项目说明
+└─ README.md              # 本文件
 ```
 
-> `data/profiles/` 存的是登录态，`data/captcha/` 存的是验证码现场截图，
-> **都别外传，别进 git**（`.gitignore` 已排除 `data/` 和 `config.json`）。
+> 开发指南（分层、约定、如何新增表、部署）见 `AGENT.md`。
+> 浏览器发布能力（CLI / 适配器 / REST 端点）已随后端一并迁入 `backed/`，
+> 详情见 `backed/cli.py`、`backed/service/publishing/` 与 `backed/api/hub.py`。
 
 ---
 
 ## 十五、参与贡献
 
-欢迎 Issue / PR。改平台适配器前先跑一下 `python cli.py diagnose --platform xxx`，
-选择器失效时用 `dump_dom()` 存现场比猜快十倍。
+欢迎 Issue / PR。后端改动请先 `cd backed && uv run pytest`；
+新增资源表见 `AGENT.md` 的「新增业务表」一节。
 
 ## 十六、AI 使用说明（透明度声明）
 
@@ -593,10 +606,10 @@ content-harbor/
 
 | 平台 | 地址 |
 |---|---|
-| **GitCode（主）** | <https://gitcode.com/badhope/content-harbor> |
-| Gitee（国内镜像） | <https://gitee.com/badhope/content-harbor> |
-| GitHub（国际镜像） | <https://github.com/x33834/content-harbor> |
-| GitHub（国际镜像 2） | <https://github.com/Morningstar202604/content-harbor> |
+| **GitCode（主）** | <https://gitcode.com/badhope/ai-content-hub> |
+| Gitee（国内镜像） | <https://gitee.com/badhope/ai-content-hub> |
+| GitHub（国际镜像） | <https://github.com/x33834/ai-content-hub> |
+| GitHub（国际镜像 2） | <https://github.com/Morningstar202604/ai-content-hub> |
 
 ## 许可证
 

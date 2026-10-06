@@ -3,6 +3,13 @@
 > **唯一真理源**：所有代码源于本文档、服务于本文档；任何影响架构/接口/数据模型/依赖的代码变更，
 > 必须立即回写对应章节 + Changelog。文档与代码脱节 = 架构失败。
 
+> **目录迁移说明（2026-10）**：后端已完成 FastAPI 结构化重构，代码统一迁入 `backed/`
+> （入口 `backed/start.py`，装配 `backed/app/factory.py`）。旧版顶层 `cli.py` / `core/` / `server/`
+> 已移除：CLI 重写于 `backed/cli.py`，发布引擎迁移至 `backed/service/publishing/`，
+> 原 REST 业务端点全部保留于 `backed/api/hub.py`（路径不变），另新增 `/api/v1` 统一 CRUD。
+> 目录与分层约定以 `AGENT.md` 为准；本文中出现的旧路径（如 `core/xxx`、`server/api.py`）
+> 对应迁移后的 `backed/` 内同名模块。
+
 | 项 | 值 |
 |---|---|
 | 版本 | 0.3.0（工作流引擎引入） |
