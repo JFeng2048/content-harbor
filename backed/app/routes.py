@@ -22,7 +22,7 @@ def setup_routes(app: FastAPI) -> None:
         return {
             "status": "ok", 
             "version": settings.api_version,
-            "service": "FastAPI安全项目"
+            "service": "内容港 Harbor"
         }
     
     @app.get("/api/info", include_in_schema=settings.debug)

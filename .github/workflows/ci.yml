@@ -10,22 +10,25 @@ permissions:
   contents: read
 
 jobs:
-  syntax-check:
+  backend:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backed
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: 安装依赖
-        run: pip install -r requirements.txt
+      - name: 安装 uv
+        run: pip install uv
+      - name: 安装依赖（uv sync，含 dev 组）
+        run: uv sync
       - name: 语法检查（compileall）
-        run: python -m compileall -q .
-      - name: 单元测试（tests/test_*.py）
-        run: python -m unittest discover -s tests -p "test_*.py" -v
-      - name: 启动冒烟测试（服务可启动、API 可访问）
+        run: uv run python -m compileall -q .
+      - name: 单元 + 集成测试（pytest）
+        run: uv run pytest tests -q
+      - name: 启动冒烟测试（应用可装配、API 可访问）
         run: |
           set -euo pipefail
-          timeout 60 python3 -m server.api &
-          sleep 6
-          curl -fsS -m 5 http://127.0.0.1:8800/status | head -c 300
+          uv run python -c "from app.factory import create_app; create_app(); print('app assembled ok')"

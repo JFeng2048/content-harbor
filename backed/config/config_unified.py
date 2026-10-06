@@ -434,7 +434,7 @@ class DevelopmentConfig(BaseConfig):
     # 测试和调试配置
     # =================================================================
     # 测试数据库
-    test_database_url: str = "mysql+pymysql://dev_user:123456@localhost:3306/api_security_demo"
+    test_database_url: str = "mysql+pymysql://dev_user:123456@localhost:3306/content_hub_test"
     
     # 邮件测试（使用MailHog或类似服务）
     smtp_host: str = "localhost"

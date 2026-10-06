@@ -7,13 +7,16 @@ __pycache__/
 # 运行时数据
 backed/data/
 backed/logs/
+backed/database/data/
 *.db
 *.sqlite3
+*.log
 
 # 环境与密钥
 .env
 .env.*
 !.env.example
+!.env.docker
 
 # 编辑器 / 系统
 .idea/

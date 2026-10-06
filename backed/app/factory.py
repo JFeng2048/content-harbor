@@ -1,10 +1,13 @@
 """应用工厂：lifespan + 中间件 + 异常 + 路由。"""
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from config import settings
 from utils.logger import setup_logging, get_logger
@@ -47,6 +50,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.error("关闭资源时出错: %s", e)
 
 
+def _mount_web_ui(app: FastAPI) -> None:
+    """挂载 Vue 管理界面（`web/` 构建产物落在 `server/static/`）。
+
+    构建方式：``cd web && pnpm build``。产物不存在时跳过，后端仍照常提供
+    REST API；``/`` 返回 ``index.html``，静态资源挂在 ``/static`` 下
+    （与 vite 的 ``base: '/static/'`` 约定一致）。
+    """
+    static_dir = Path(__file__).resolve().parents[2] / "server" / "static"
+    if not static_dir.is_dir():
+        return
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    index_file = static_dir / "index.html"
+    if index_file.is_file():
+
+        @app.get("/", include_in_schema=False)
+        def index() -> FileResponse:
+            """Web 管理界面入口：浏览器打开根路径即是这个。"""
+            return FileResponse(str(index_file))
+
+
 def create_app() -> FastAPI:
     app = FastAPI(**AppConfig.get_app_config(), lifespan=lifespan)
 
@@ -61,7 +84,9 @@ def create_app() -> FastAPI:
     setup_exception_handlers(app)
     setup_routes(app)
     register_routers(app)
-    # 深度合并：把平台发布 REST API（server/api.py）挂进主后端，
+    # 深度合并：把平台发布 REST API（api/hub.py）挂进主后端，
     # 由本应用统一对外服务（主后端自带 /health，故此处不重复注册）。
     register_hub(app, include_health=False)
+    # Web 管理界面（构建产物存在则挂载）
+    _mount_web_ui(app)
     return app

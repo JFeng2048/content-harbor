@@ -1,6 +1,8 @@
-# 一稿 YiGao · AI 内容中台
+# 内容港 Harbor
 
-> **一稿写，全网发。** 文章存在你自己的库里，AI 通过 API / MCP 全权管理：写、改、发、更新、看账号全部内容。
+> [English](README.en.md) · 中文
+
+> **内容进港，全网分发。** 文章存在你自己的库里，AI 通过 API / MCP 全权管理：写、改、发、更新、看账号全部内容。
 > 自带内置浏览器，扫码登录一次就长期在线，不依赖你日常的 Chrome / Edge 开着。
 
 <p>
@@ -9,11 +11,11 @@
   <img alt="fastapi" src="https://img.shields.io/badge/API-FastAPI-teal">
   <img alt="mcp" src="https://img.shields.io/badge/AI-MCP-orange">
   <img alt="platforms" src="https://img.shields.io/badge/platforms-10-blueviolet">
-  <img alt="GitCode" src="https://img.shields.io/badge/GitCode-badhope%2Fai--content--hub-1a73e8">
+  <img alt="GitCode" src="https://img.shields.io/badge/GitCode-badhope%2Fcontent--harbor-1a73e8">
   <img alt="国内模型" src="https://img.shields.io/badge/AI-DeepSeek%20%2F%20豆包%20%2F%20通义-brightgreen">
 </p>
 
-![一稿 · 主界面（晴空主题）](docs/screenshots/01-home.png)
+![内容港 · 主界面（晴空主题）](docs/screenshots/01-home.png)
 
 <table>
   <tr>
@@ -22,9 +24,9 @@
   </tr>
 </table>
 
-> **重构进行中**：仓库正在把后端从旧版 `cli.py` / `core` / `server` 迁移到 `backed/`（FastAPI）。
-> 当前 `backed/` 已落地数据层与统一 REST CRUD（文章 / 发布实例 / 账号 / 任务 / 统一任务），
-> 浏览器发布适配器与旧 CLI 正在迁移。开发规范见 [`AGENT.md`](AGENT.md)。
+> **后端重构已完成**：后端已从旧版 `cli.py` / `core` / `server` 迁移到 `backed/`（FastAPI 分层架构），
+> 原 REST 端点（发布 / 原地更新 / 同步 / AI / 账号）全部保留，并新增统一 CRUD 资源接口（`/api/v1`）。
+> 开发规范见 [`AGENT.md`](AGENT.md)，架构说明见 [`ARCHITECTURE.md`](ARCHITECTURE.md)。
 
 ## 30 秒看懂它能干什么
 
@@ -51,8 +53,18 @@ cd backed && uv sync && uv run uvicorn start:app --host 0.0.0.0 --port 8000 --re
 - API 文档：http://localhost:8000/docs
 - 部署：见 `deplay/`（docker-compose + Dockerfile）
 
-> 旧版的 CLI / 浏览器发布适配器（`cli.py`、`core/adapters`、`server/`）正在迁移到新的 FastAPI
-> 服务之上，数据层（文章 / 发布实例 / 账号 / 任务 / 统一任务）已先行落地，详见 `AGENT.md`。
+### CLI 常用命令（在 `backed/` 目录下运行）
+
+```bash
+cd backed
+uv run python cli.py --headed login --platform juejin   # 扫码登录一次，登录态长期有效
+uv run python cli.py status                             # 中台总览
+uv run python cli.py publish --id 1 --platforms juejin,csdn   # 发布（--draft 只发草稿箱）
+uv run python cli.py serve                              # 起 REST 服务（默认 http://127.0.0.1:8800）
+```
+
+> 旧版顶层 `cli.py` / `core/` / `server/` 已迁移：CLI 见 `backed/cli.py`，发布引擎见
+> `backed/service/publishing/`，REST 端点（含发布 / 原地更新 / 同步 / AI / 账号）见 `backed/api/hub.py`。
 
 ## 支持平台（10 个）
 
@@ -70,7 +82,7 @@ cd backed && uv sync && uv run uvicorn start:app --host 0.0.0.0 --port 8000 --re
 | 开源中国 | 浏览器 UI 注入 | ✅ | — | — | UEditor 富文本 |
 
 > 知乎 / 头条 / 开源中国的发布选择器参考社区实测（MultiPost-Extension 等），平台改版后跑
-> `python cli.py dump-dom --platform xxx` 重抓结构即可。扩一个新平台照着任一适配器抄 150 行。
+> `uv run python cli.py --headed diagnose --platform xxx` 看现场、重抓结构即可。扩一个新平台照着任一适配器抄 150 行。
 
 ## 这是什么 / 不是什么
 
@@ -91,7 +103,7 @@ cd backed && uv sync && uv run uvicorn start:app --host 0.0.0.0 --port 8000 --re
 | 做成独立程序 | 做不到，必须寄生 | 天然独立，能打包分发 |
 
 代价：平台适配要自己写。目前 10 个平台已实现（见上方平台矩阵），
-扩平台照着 150 行抄一个即可。文章可以由 AI 直接写（`core/ai.py`），接任何 OpenAI 兼容模型（DeepSeek / 豆包 / 通义 / Kimi / 智谱 / Ollama）。
+扩平台照着 150 行抄一个即可。文章可以由 AI 直接写（`backed/service/publishing/ai.py`），接任何 OpenAI 兼容模型（DeepSeek / 豆包 / 通义 / Kimi / 智谱 / Ollama）。
 
 ---
 
@@ -122,6 +134,9 @@ cd backed && uv sync && uv run uvicorn start:app --host 0.0.0.0 --port 8000 --re
 
 ## 三、命令行用法
 
+> CLI 入口在 `backed/cli.py`；以下命令请在 `backed/` 目录下执行
+> （推荐 `uv run python cli.py ...`，也可在已装好依赖的环境里 `python cli.py ...`）。
+
 ```bash
 # 1) 扫码登录（会弹出浏览器窗口，扫一次就存住了）
 python cli.py login --platform juejin
@@ -131,7 +146,7 @@ python cli.py login --platform csdn
 python cli.py check --platform juejin
 
 # 3) 导入一篇文章
-python cli.py import --path ./my-post.md
+python cli.py import-md --path ./my-post.md
 
 # 4) 发布
 python cli.py publish --id 1 --platforms juejin,csdn
@@ -148,7 +163,9 @@ python cli.py status
 
 ## 四、Web 管理界面
 
-启动服务后浏览器打开 `http://127.0.0.1:8800`。左边文章列表，中间编辑区，右边发布面板。
+先把前端构建一次（`cd web && pnpm install && pnpm build`，产物落在 `server/static/`），
+再启动后端，浏览器打开 `http://127.0.0.1:8000`（`cli.py serve` 默认 `http://127.0.0.1:8800`）。
+左边文章列表，中间编辑区，右边发布面板。
 
 界面走「**晴空**」主题——明亮现代 SaaS 风：浅灰底 + 纯白卡片 + 飞书蓝主色，
 圆角适中、无衬线字体、全链路 0 外部请求（离线可用），顶栏是分组工具条
@@ -181,12 +198,12 @@ python cli.py status
 ```bash
 cd web
 pnpm install
-pnpm dev        # 开发模式，:5173，自动代理 /api 到后端 :8800
-pnpm build      # 构建到 server/static/，之后 python cli.py serve 一把梭带界面
+pnpm dev        # 开发模式，:5173，自动代理 /api 到后端（默认 :8000）
+pnpm build      # 构建到 server/static/，之后启动后端即可直接使用界面
 ```
 
-改界面就改 `web/src/`，改完 `pnpm build`；不想装 Node 也行，
-`server/static/` 里是构建好的产物，直接跑后端就能用。
+改界面就改 `web/src/`，改完 `pnpm build`；构建产物不再随仓库提交，
+未构建时后端只提供 REST API / MCP，Web 界面不生效。
 
 ---
 
@@ -248,10 +265,31 @@ ai_polish         AI 润色：修错别字、统一代码块语言、理顺结�
 
 然后直接说人话：「写篇讲 XX 的文章发到掘金和 CSDN」「把 3 号文章标题改了同步到全部平台」「看看我账号里有哪些文章」。
 
-### 方式 B：REST API（新版 FastAPI 服务）
+### 方式 B：REST API（FastAPI 服务）
 
-新后端（`backed/`）提供统一 REST CRUD，所有接口挂在 `/api/v1` 下，统一响应信封
-（`SuccessResponse` / `PaginationResponse`），详见 `AGENT.md`。
+服务启动后（默认 `http://127.0.0.1:8000`，`cli.py serve` 默认 `http://127.0.0.1:8800`），提供两类接口。
+
+**1）业务端点**（发布引擎，路径与原版保持一致）
+
+| 方法 | 路径 | 作用 |
+|---|---|---|
+| GET | `/status` | 总览 |
+| GET/POST | `/articles` | 列表 / 新建 |
+| GET/PUT | `/articles/{id}` | 读 / 改 |
+| POST | `/articles/{id}/publish` | 发布 |
+| POST | `/articles/{id}/update` | **原地更新** |
+| POST | `/sync/pending` | 推平所有改动 |
+| POST | `/refresh/{platform}` | 抓账号文章入库 |
+| POST | `/ai/write` | **AI 写一篇并入库** |
+| POST | `/articles/{id}/ai-rewrite` | AI 改写 |
+| POST | `/articles/{id}/ai-polish` | AI 润色 |
+| GET | `/accounts`、`/tasks` | 账号、任务流水 |
+| POST | `/accounts/{platform}/login` | 扫码/过验证登录（`on_captcha=handoff\|abort`） |
+| POST | `/accounts/{platform}/solve-captcha` | 就地处理验证码（半自动+人工） |
+| GET | `/accounts/{platform}/diagnose` | 这平台怎么接、验证码怎么过 |
+| GET | `/platforms` | 已实现的平台列表 |
+
+**2）统一 CRUD 资源**（新增，挂在 `/api/v1` 下，统一响应信封 `SuccessResponse` / `PaginationResponse`）
 
 | 资源 | 路径前缀 | 说明 |
 |---|---|---|
@@ -264,8 +302,6 @@ ai_polish         AI 润色：修错别字、统一代码块语言、理顺结�
 每个资源提供：`GET /`（列表分页）、`POST /`（创建）、`GET /{id}`（详情）、
 `PUT /{id}`（更新）、`DELETE /{id}`（删除）、`PATCH /{id}/status`（状态变更）。
 交互式文档：http://localhost:8000/docs
-
-> 旧版 `server/api.py` 的发布 / AI 业务接口正在迁移，请以新版 `/api/v1` 与各资源 `Resource` 为准。
 
 ---
 
@@ -297,7 +333,7 @@ python cli.py diagnose --platform cnblogs    # 看看这平台推荐怎么接
 
 ### L2 反检测 + 登录态持久化（降低触发率）
 
-`core/browser.py` 里逐条抹平自动化痕迹：
+`backed/service/publishing/browser.py` 里逐条抹平自动化痕迹：
 
 | 指纹点 | 处理 |
 |---|---|
@@ -315,7 +351,7 @@ python cli.py diagnose --platform cnblogs    # 看看这平台推荐怎么接
 
 ### L3 半自动 + 人工交接（真弹了怎么办）
 
-`core/humanize.py` + `CaptchaPolicy`：
+`backed/service/publishing/humanize.py` + `CaptchaPolicy`：
 
 1. **先半自动试一次** —— 纯复选框那种（"确认您不是机器人"）经常能过，
    用带轨迹的鼠标去点，而不是 `locator.click()`（后者零延迟，行为特征明显）。
@@ -455,11 +491,11 @@ python tests/e2e_zhihu_screenshots.py [截图目录]
 
 实测成绩（2026-09）：掘金截图版 **16/16**（REST 1~5ms、扫码到在线 7.9s、发布 0.6s、
 刷新持久化 ✓）；知乎截图版 **9/9**（发布全流程 25.2s、post_id 落库 ✓）+ API 冒烟 **4/4**。
-原理与边界（patch 方式、mock 扫码、测不到的真实风控）见 [tests/README.md](tests/README.md)。
+原理与边界（patch 方式、mock 扫码、测不到的真实风控）见 [backed/tests_publishing/README.md](backed/tests_publishing/README.md)。
 
 ## 十二、扩展新平台（照抄 150 行）
 
-在 `core/adapters/` 新建 `xxx.py`，实现四个动作：
+在 `backed/service/publishing/adapters/` 新建 `xxx.py`，实现四个动作：
 
 ```python
 @register
@@ -476,12 +512,12 @@ class XxxAdapter(PlatformAdapter):
     def update(self, page, pub, article) -> bool: ... # 打开 edit_url 改内容保存
 ```
 
-最后在 `core/service.py` 里 `from core.adapters import xxx` 导入一下即可注册。
+最后在 `backed/service/publishing/service.py` 里 `from service.publishing.adapters import xxx` 导入一下即可注册。
 
 **校准技巧**（必看）：平台改版导致选择器失效时，别瞎猜——
 
 ```python
-from core.browser import dump_dom
+from service.publishing.browser import dump_dom
 dump_dom(page, "csdn_list")     # HTML 存到 data/debug/
 ```
 
@@ -547,8 +583,8 @@ ai-content-hub/
 ```
 
 > 开发指南（分层、约定、如何新增表、部署）见 `AGENT.md`。
-> 旧版 `cli.py` / `core/adapters` / `server/` 的浏览器发布能力正在迁移到新的
-> FastAPI 服务之上，数据层已先行落地。
+> 浏览器发布能力（CLI / 适配器 / REST 端点）已随后端一并迁入 `backed/`，
+> 详情见 `backed/cli.py`、`backed/service/publishing/` 与 `backed/api/hub.py`。
 
 ---
 

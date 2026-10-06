@@ -13,11 +13,14 @@
 ├── docs/              # 产品 / 架构文档
 ├── web/               # 前端（Vue3 + Vite）
 ├── start.sh / start.bat / start.ps1   # 本地启动脚本（仅依赖 uv）
-├── README.md          # 项目说明
+├── README.md / README.en.md           # 项目说明（中 / 英）
+├── ARCHITECTURE.md / PLATFORM_CONNECTION.md / AUDIT.md   # 架构 / 平台接入 / 审计文档
+├── CHANGELOG.md / CONTRIBUTING.md / SECURITY.md / CODE_OF_CONDUCT.md
 └── AGENT.md           # 本文件
 ```
 
-> 根目录只保留上述目录与文件；旧版 `core/`、`server/`、`tests/`、`scripts/` 已被移除。
+> 旧版顶层代码目录 `cli.py`、`core/`、`server/`、`tests/`、`scripts/` 已被移除，能力迁入
+> `backed/`（CLI → `backed/cli.py`，发布引擎 → `backed/service/publishing/`，REST → `backed/api/hub.py`）。
 
 ---
 
